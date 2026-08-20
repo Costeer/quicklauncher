@@ -1,0 +1,3 @@
+# Separate search providers from presentation
+
+Search providers return typed results to a host-owned session that handles cancellation, privacy filtering, deterministic local ranking, and merging. Layouts and blocks render those results without owning retrieval, and the host validates and executes typed result actions. Users enable providers separately; missing, denied, or revoked permissions switch only the affected provider's saved setting off. Ranking may retain bounded, decaying app and shortcut launch history, but never raw contact, file, or web queries. This lets users change search presentation and sources independently while keeping profile policy and result behavior consistent.

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="current_widget_description">Diagnostic widget for the current destination</string>
+    <string name="neighbor_widget_description">Diagnostic widget for the live neighbor preview</string>
+</resources>

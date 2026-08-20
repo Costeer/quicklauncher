@@ -1,0 +1,3 @@
+# Ship outside Google Play without Play Services
+
+Quicklauncher will never be distributed through Google Play and will not depend on Google Play Services. Each stable GitHub release contains one universal signed APK for Obtainium, with tags aligned to `versionName` and a monotonically increasing `versionCode`; the launcher has no in-app updater. The app requests Android's broad package visibility permission because complete device search is a core feature, without accepting Google Play's declaration and review process. Diagnostics, location, and any other service integration must use platform APIs, self-hosted components, or replaceable non-Google providers.

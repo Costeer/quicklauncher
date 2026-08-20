@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/neighbor_widget_description"
+    android:initialLayout="@layout/diagnostic_widget"
+    android:minHeight="110dp"
+    android:minWidth="110dp"
+    android:previewLayout="@layout/diagnostic_widget"
+    android:resizeMode="horizontal|vertical"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen" />

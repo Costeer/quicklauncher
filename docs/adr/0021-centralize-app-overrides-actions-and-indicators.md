@@ -1,0 +1,3 @@
+# Centralize app overrides, actions, and indicators
+
+The host owns profile-aware app labels, icon overrides, favorites, folders, visibility, notification indicators, and the long-press action overlay. Hiding removes an app from ordinary collections and prompts separately for search visibility; settings always retains a recovery entry. Modules render host state and emit typed actions rather than storing app customizations, reading notifications, or launching menu intents. A module may choose dots, approximate counts, or no indicator, but the host alone determines eligible profile-aware state and retains no notification content.

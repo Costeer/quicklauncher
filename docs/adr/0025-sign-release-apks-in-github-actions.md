@@ -1,0 +1,3 @@
+# Sign release APKs in GitHub Actions
+
+Stable and preview workflows reconstruct their separate production keystores from protected GitHub Actions secrets, sign exactly one universal APK per release, and publish build-provenance attestations, certificate fingerprints, and final APK digests. Release environments require maintainer approval, actions are pinned to immutable commits, workflows use least-privilege permissions, and signing secrets are unavailable to pull-request jobs. Encrypted offline key backups and an Android v3 signing-lineage procedure remain mandatory because hosted signing does not provide Play App Signing recovery.
