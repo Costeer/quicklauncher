@@ -12,7 +12,9 @@ plugins {
     alias(libs.plugins.kotlin.android) apply false
     alias(libs.plugins.kotlin.compose) apply false
     alias(libs.plugins.kotlin.jvm) apply false
+    alias(libs.plugins.ksp) apply false
     alias(libs.plugins.licensee) apply false
+    alias(libs.plugins.paparazzi) apply false
     alias(libs.plugins.dependency.analysis)
 }
 
@@ -27,18 +29,12 @@ dependencyAnalysis {
         // These modules intentionally have no source until their contract or host phase begins.
         // Remove each exception when that module gains its first source file.
         listOf(
-            ":contracts:contribution",
-            ":contracts:ui",
-            ":registry:annotations",
-            ":registry:ksp",
             ":host:runtime",
             ":host:data",
             ":host:platform",
             ":host:editor",
             ":host:settings",
             ":host:backup",
-            ":testing:contracts",
-            ":testing:fakes",
         ).forEach { placeholderPath ->
             project(placeholderPath) {
                 onRedundantPlugins {
@@ -47,6 +43,60 @@ dependencyAnalysis {
                 onModuleStructure {
                     severity("ignore")
                 }
+            }
+        }
+
+        project(":testing:samples") {
+            onUnusedDependencies {
+                // The Paparazzi plugin injects this test dependency; the shared snapshot suite
+                // consumes it through :testing:contracts, which dependency analysis cannot trace.
+                exclude(libs.paparazzi)
+            }
+        }
+
+        // JVM compilation selects Compose's desktop/JVM-stub variants. These generic coordinates
+        // must remain variant-aware so Android consumers select Android artifacts instead of
+        // receiving duplicate desktop classes. Dependency analysis reports the selected variants
+        // as transitive and the declarations as unused, so only those false positives are excluded.
+        project(":contracts:contribution") {
+            onUnusedDependencies { exclude(libs.androidx.compose.runtime) }
+            onUsedTransitiveDependencies { exclude("androidx.compose.runtime:runtime-desktop") }
+        }
+        project(":contracts:ui") {
+            onUnusedDependencies {
+                exclude(libs.androidx.compose.runtime, libs.androidx.compose.ui)
+            }
+            onUsedTransitiveDependencies {
+                exclude(
+                    "androidx.compose.runtime:runtime-desktop",
+                    "androidx.compose.ui:ui-jvmstubs",
+                )
+            }
+        }
+        project(":testing:contracts") {
+            onUnusedDependencies {
+                exclude(libs.androidx.compose.runtime, libs.androidx.compose.foundation)
+            }
+            onUsedTransitiveDependencies {
+                exclude(
+                    "androidx.compose.foundation:foundation-jvmstubs",
+                    "androidx.compose.foundation:foundation-layout-jvmstubs",
+                    "androidx.compose.runtime:runtime-desktop",
+                    "androidx.compose.ui:ui-graphics-jvmstubs",
+                    "androidx.compose.ui:ui-jvmstubs",
+                    "androidx.compose.ui:ui-text-jvmstubs",
+                )
+            }
+        }
+        project(":testing:fakes") {
+            onUnusedDependencies {
+                exclude(libs.androidx.compose.runtime, libs.androidx.compose.ui)
+            }
+            onUsedTransitiveDependencies {
+                exclude(
+                    "androidx.compose.runtime:runtime-desktop",
+                    "androidx.compose.ui:ui-jvmstubs",
+                )
             }
         }
     }
@@ -98,16 +148,36 @@ tasks.register("checkModuleBoundaries") {
                     .mapNotNull { dependency ->
                         val target = dependency.path
                         val isTestDependency = configuration.name.contains("test", ignoreCase = true)
+                        val isKspDependency = configuration.name.contains("ksp", ignoreCase = true)
                         val allowed = when {
+                            target == owner.path -> true
+                            owner.path.startsWith(":modules:") && isKspDependency ->
+                                target == ":registry:ksp"
                             owner.path.startsWith(":modules:") && isTestDependency ->
                                 target.startsWith(":contracts:") || target.startsWith(":testing:")
-                            owner.path.startsWith(":modules:") -> target.startsWith(":contracts:")
+                            owner.path.startsWith(":modules:") ->
+                                target.startsWith(":contracts:") || target == ":registry:annotations"
                             owner.path.startsWith(":host:") ->
-                                !target.startsWith(":modules:") && target != ":app"
+                                target.startsWith(":contracts:") || target.startsWith(":host:")
                             owner.path.startsWith(":contracts:") ->
-                                !target.startsWith(":host:") &&
-                                    !target.startsWith(":modules:") &&
-                                    target != ":app"
+                                target.startsWith(":contracts:")
+                            owner.path == ":registry:annotations" ->
+                                target.startsWith(":contracts:")
+                            owner.path == ":registry:ksp" ->
+                                target.startsWith(":contracts:") || target == ":registry:annotations"
+                            owner.path == ":testing:contracts" || owner.path == ":testing:fakes" ->
+                                target.startsWith(":contracts:")
+                            owner.path == ":testing:samples" && isKspDependency ->
+                                target == ":registry:ksp"
+                            owner.path == ":testing:samples" ->
+                                target.startsWith(":contracts:") ||
+                                    target.startsWith(":testing:") ||
+                                    target == ":registry:annotations"
+                            owner.path == ":app" ->
+                                target.startsWith(":contracts:") ||
+                                    target.startsWith(":host:") ||
+                                    target.startsWith(":modules:") ||
+                                    target.startsWith(":registry:")
                             else -> true
                         }
 
@@ -128,14 +198,30 @@ tasks.register("checkModuleBoundaries") {
 
 tasks.register("verifyNoGoogleDependencies") {
     group = "verification"
-    description = "Rejects Google Play Services and Firebase runtime dependencies."
-    notCompatibleWithConfigurationCache("Inspects resolved runtime configurations across projects.")
+    description = "Rejects Google Play Services and Firebase dependencies."
+    notCompatibleWithConfigurationCache("Inspects resolved dependency configurations across projects.")
 
     doLast {
         val bannedGroups = setOf("com.google.android.gms", "com.google.firebase")
-        val violations = subprojects.flatMap { owner ->
+        val directViolations = subprojects.flatMap { owner ->
+            owner.configurations.flatMap { configuration ->
+                configuration.dependencies.mapNotNull { dependency ->
+                    val group = dependency.group
+                    if (group in bannedGroups) {
+                        "${owner.path}:${configuration.name} -> $group:${dependency.name}:${dependency.version}"
+                    } else {
+                        null
+                    }
+                }
+            }
+        }
+        val resolvedViolations = subprojects.flatMap { owner ->
             owner.configurations
-                .filter { it.isCanBeResolved && it.name.endsWith("RuntimeClasspath") }
+                .filter {
+                    it.isCanBeResolved &&
+                        (it.name.contains("classpath", ignoreCase = true) ||
+                            it.name.startsWith("ksp", ignoreCase = true))
+                }
                 .flatMap { configuration ->
                     configuration.incoming.resolutionResult.allComponents.mapNotNull { component ->
                         val module = component.id as? ModuleComponentIdentifier ?: return@mapNotNull null
@@ -146,7 +232,8 @@ tasks.register("verifyNoGoogleDependencies") {
                         }
                     }
                 }
-        }.distinct().sorted()
+        }
+        val violations = (directViolations + resolvedViolations).distinct().sorted()
 
         check(violations.isEmpty()) {
             "Forbidden Google runtime dependencies:\n${violations.joinToString("\n") { " - $it" }}"

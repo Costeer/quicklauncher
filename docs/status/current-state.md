@@ -1,79 +1,67 @@
 # Current implementation status
 
-Reviewed on 2026-08-20 against the [architecture plan](../architecture/launcher-architecture-plan.md) and the current working tree.
+Reviewed on 2026-08-22 against the [architecture plan](../architecture/launcher-architecture-plan.md), accepted ADRs, and the current working tree.
 
 ## Summary
 
-Quicklauncher has a detailed architecture and an Android project skeleton. It is not yet a usable launcher.
+Phases 0 and 1 are complete. Phase 2, persistence and spatial state, is the next build stage and has not begun.
 
-Phase 0 is complete and closed. The repository has the Gradle foundation, release channels, dependency checks, CI workflow, identity types, and three isolated executable risk probes. The API 35 emulator and GrapheneOS Pixel 10a provide the required device evidence under ADR 0029.
+The production app is still not a usable launcher. It renders an empty Compose activity and does not yet register as Home, persist launcher state, show apps, or compose contributions. Those capabilities begin in later phases.
 
-The production app still renders an empty Compose activity. It cannot register as the device Home app, show apps, navigate destinations, or persist launcher state.
+## Phase 1 outcome
 
-Phases 1 through 9 have not started beyond placeholder Gradle modules.
+The authoritative specifications are indexed under [`docs/contracts`](../contracts/README.md). Shared identity, configuration, lifecycle, validation, accessibility, registration, and evolution rules have one definition; the layout, block, search-provider, launcher-command, and destination-template specifications add their type-specific behavior.
 
-## What exists now
+The implementation includes:
 
-### Product and architecture documents
+- `:contracts:domain`: validated namespaced contribution, category, capability, slot, configuration, instance, destination, content, search, and invocation identities; local stable keys; contract majors; schema versions; and ARGB values.
+- `:contracts:contribution`: common and type-specific descriptors, exact major-1 compatibility, declarative settings and validation, typed configuration codecs, sequential pure migrations with original-document preservation, the five generic contribution contracts, typed results, and generic static registry records.
+- `:contracts:ui`: immutable render snapshots and collections, typed action sinks, typed slot and prepared-content renderers, background contrast, placement and composition state, theme and orientation state, accessibility declarations and validation, preview scenarios, and performance-hook declarations.
+- Layout and block sessions expose Compose `Render` entry points, accept host-prepared content, own cancellable work through an instance scope, and close when their composition leaves the tree.
+- `:registry:annotations`: source-retained registration annotations and compile-visible codec, settings, and contract-suite manifests for all five first-release categories.
+- `:registry:ksp`: a thin symbol adapter over a platform-neutral validator and deterministic source generator. Generated code preserves one configuration type across target, codec, descriptor, and category suite, uses direct references and stable ordering, and does not scan the runtime classpath or use reflection.
+- `:testing:contracts`: reusable public-contract suites for the complete configuration failure matrix, immutable snapshots, rejected typed actions, slot and prepared-content rendering, query replacement and stale-result cancellation, owned-job disposal, accessibility and focus declarations, contrast, fixture coverage, screenshots, and category-specific performance hooks.
+- `:testing:fakes`: deterministic success, loading, denial, locked-profile, error, cancellation, placement, composition, theme, and prepared-content behavior without Android services.
+- `:testing:samples`: an Android test-fixture library containing skeletal contributions for all five categories. Each contribution registers through KSP, supplies a matching typed codec and sequential migrations, declares the mandatory suite metadata, emits typed behavior, and appears in the generated registry.
 
-- [`CONTEXT.md`](../../CONTEXT.md) defines the product language and system boundaries.
-- The [`docs/adr`](../adr/) directory contains 29 accepted architecture decisions.
-- The [consolidated architecture plan](../architecture/launcher-architecture-plan.md) defines the module model, Android platform boundaries, release phases, and 1.0 acceptance checklist.
-- [Release-signing research](../research/launcher-release-signing.md) records the signing and Obtainium findings.
+The generated registry rejects:
 
-The product decisions are specific enough to begin implementation. More general planning is not the current blocker.
+- duplicate contribution and persisted configuration type IDs;
+- malformed contribution, configuration, capability, slot, and category IDs;
+- unsupported contract majors;
+- invalid common or type-specific descriptors and settings schemas;
+- missing codecs or contract suites;
+- target/codec, target/suite, and inherited generic mismatches;
+- codec/descriptor configuration ID mismatches;
+- contract-declaration/descriptor contribution ID mismatches;
+- missing fixture scenarios or performance hooks;
+- contract suites declared for the wrong category;
+- targets that do not implement the declared contract or cannot be referenced directly;
+- capability dependency cycles; and
+- incompatible block/slot declarations and direct or indirect block-nesting cycles.
 
-### Android project foundation
+Generated-registry tests compare every generated descriptor field with the public sample declaration and assert target, codec, suite, scenario, and performance-hook identity. Code-contract and configuration-schema versions evolve independently. Persisted category IDs are explicit, tested string literals rather than enum names or ordinals; adding a later category requires explicit catalog, annotation, validation, and generation support and cannot renumber the existing five IDs.
 
-- The Gradle 8.13 wrapper and Android Gradle Plugin 8.13.2 are configured.
-- The project compiles against Android 36, targets Android 35, and has a minimum SDK of 35.
-- Kotlin 2.2.21, Java 17, and Compose are configured.
-- Stable and preview product flavors use separate application IDs.
-- The root build checks module dependency direction and rejects Google Play Services and Firebase dependencies.
-- The app applies an Apache 2.0 license allowlist.
-- GitHub Actions defines stable and preview build, lint, unit-test, dependency, and license jobs.
-- Placeholder modules exist for contracts, registry generation, host services, and testing support.
+## Deliberate Phase 1 limitations
 
-Most of these modules currently contain build files only. `:contracts:domain` now contains validated package and profile identity value types with unit coverage; the rest of the production contracts and host implementations start in Phase 1.
+The skeletal contributions are contract fixtures, not production launcher UI. The Android sample module exists to exercise real Compose rendering, Robolectric semantics, and Paparazzi screenshots; it does not use Android launcher services, persistence, Room, real widgets, production search sources, production themes, or backups.
 
-### Gesture prototype
+Source-retained annotations are processed in the contribution's source module. A later multi-module application registry must aggregate generated fragments explicitly because source annotations are not visible through compiled dependency jars.
 
-The [`prototypes/nested-scroll`](../../prototypes/nested-scroll/) app contains a state machine, a Compose demonstration, seven unit tests, and eight instrumentation tests. The [recorded prototype result](../prototypes/nested-scroll.md) says the API 35 emulator suite passed.
-
-The GrapheneOS Pixel 10a manual state checks and all eight connected Compose tests pass. The physical run exposed an old Espresso input path; pinning Espresso 3.7.0 fixed it on API 37. CI builds, lints, license-checks, and unit-tests all three probes, and an API 35 emulator job runs the nested-scroll instrumentation suite. Boundary handoff is accepted as the default, while edge-only navigation remains a user option.
-
-### Widget and platform probes
-
-The [widget-neighbor proof](../prototypes/widget-neighbors.md) hosts separate live widget IDs in the current destination and neighbor preview. Its build, lint, license check, five unit tests, and API 35 emulator procedure pass, including cancellation cleanup.
-
-The [platform behavior probe](../prototypes/platform-probe.md) exercises Home-role state, repeated Home delivery, predictive Back, profile visibility, and safe Settings routing. Its build, lint, license check, and eight unit tests pass. Predictive Back cancellation and commit pass on the API 35 emulator and GrapheneOS Pixel 10a. On the physical device, repeated Home, profile transitions, widget hosting, and route guards were also exercised. Two findings now shape production work: locked Private Space queries can still return activities, and the role request can return without displaying a chooser or granting the role.
-
-### Production app
-
-The production app contains an empty `MainActivity`. Its manifest registers a normal launcher icon with `MAIN` and `LAUNCHER`, but it does not declare `HOME` and `DEFAULT`. Android therefore cannot select it as the default launcher.
-
-No production implementation exists yet for:
-
-- destination and block contracts;
-- generated contribution registration;
-- spatial navigation or editing;
-- app discovery and launching;
-- persistence or migrations;
-- widgets, shortcuts, profiles, or Private Space;
-- search;
-- themes, fonts, icons, and backgrounds;
-- backups and restore;
-- launcher settings, diagnostics, or recovery.
+Performance hooks are deterministic contract-test probes. Device-specific numeric thresholds remain release-hardening work after production implementations and device baselines exist.
 
 ## Verification status
 
-Java 17 is supplied reproducibly through Nix in this environment. Android builds use SDK 36; device checks use the local API 35 emulator. The domain tests, probe builds, probe JVM tests, lint checks, license checks, and the eight-test nested-scroll instrumentation suite were independently reproduced on 2026-08-20.
+Java 17 and Android SDK 36 were supplied through Nix. The distinct Phase 1 JVM/debug suite contains 122 passing tests: 10 domain, 11 contribution, 6 UI, 33 registry processor/validator, 3 fake-host, and 59 generated-registry, lifecycle, black-box, Compose interaction, accessibility, and screenshot tests. The registry total contains 30 focused compile tests. All 59 sample tests also pass against the release variant, and 28 Paparazzi PNG baselines verify.
 
-The final combined gate completed successfully in 42 seconds: 2,377 Gradle tasks covered stable and preview app assembly, lint and unit tests; all three probe assemblies, lint checks, JVM tests, and license checks; domain tests; module-boundary validation; Google dependency rejection; and repository-wide dependency health. `actionlint` 1.7.12 also accepted the updated GitHub Actions workflow, and `git diff --check` reported no whitespace errors.
+The required repository-wide command completed successfully in 1 minute 42 seconds with 2,752 Gradle tasks:
 
-The repository also has no commits and no configured Git remote. Most project files are staged or untracked. There is no immutable baseline yet, and the GitHub Actions workflow cannot have run from this local repository configuration.
+```bash
+./gradlew build checkModuleBoundaries verifyNoGoogleDependencies buildHealth \
+  --no-daemon --no-configuration-cache --console=plain
+```
 
-The local verification command is:
+The extended local gate completed successfully in 1 minute 28 seconds with 2,377 Gradle tasks:
 
 ```bash
 ./gradlew \
@@ -83,25 +71,56 @@ The local verification command is:
   :app:lintPreviewDebug \
   :app:testStableDebugUnitTest \
   :app:testPreviewDebugUnitTest \
+  :prototypes:nested-scroll:assembleDebug \
+  :prototypes:nested-scroll:lintDebug \
   :prototypes:nested-scroll:testDebugUnitTest \
+  :prototypes:nested-scroll:licensee \
+  :prototypes:platform-probe:assembleDebug \
+  :prototypes:platform-probe:lintDebug \
   :prototypes:platform-probe:testDebugUnitTest \
+  :prototypes:platform-probe:licensee \
+  :prototypes:widget-neighbors:assembleDebug \
+  :prototypes:widget-neighbors:lintDebug \
   :prototypes:widget-neighbors:testDebugUnitTest \
+  :prototypes:widget-neighbors:licensee \
   :contracts:domain:test \
+  :contracts:contribution:test \
+  :contracts:ui:test \
+  :registry:annotations:build \
+  :registry:ksp:test \
+  :testing:contracts:build \
+  :testing:fakes:test \
+  :testing:samples:assembleDebug \
+  :testing:samples:lintDebug \
+  :testing:samples:testDebugUnitTest \
+  :testing:samples:testReleaseUnitTest \
+  :testing:samples:verifyPaparazziDebug \
+  :contracts:domain:licensee \
+  :contracts:contribution:licensee \
+  :contracts:ui:licensee \
+  :registry:annotations:licensee \
+  :registry:ksp:licensee \
+  :testing:contracts:licensee \
+  :testing:fakes:licensee \
+  :testing:samples:licensee \
   checkModuleBoundaries \
   verifyNoGoogleDependencies \
   buildHealth \
-  :app:licensee
+  :app:licensee \
+  --no-daemon --no-configuration-cache --console=plain
 ```
 
-Run the prototype instrumentation suite separately on an API 35 emulator. The recorded GrapheneOS Pixel result supplies the required physical-device evidence.
+Dependency health produced no advice or warnings. Module-boundary and Google Play Services/Firebase rejection passed. All applicable license and Android lint tasks passed. `nix-shell -p actionlint --run 'actionlint .github/workflows/ci.yml'` accepted the CI workflow, and `git diff --check` reported no whitespace errors.
+
+The recorded Phase 0 emulator and GrapheneOS evidence remains unchanged. No APK was published, no release was created, and signing infrastructure was not changed.
 
 ## Phase status
 
 | Phase | Status | Remaining exit work |
 | --- | --- | --- |
 | 0. Project and risk spikes | Complete | None. The executable proofs and required device results are recorded. |
-| 1. Contracts and generated registry | Not started | Write five contract specifications; implement IDs, descriptors, settings, actions, codecs, and contract versions; build the KSP registry; add compile tests, a contribution test kit, fakes, and skeletal contributions. |
-| 2. Persistence and spatial state | Not started | Add Room and Proto DataStore; implement `LauncherStore`, migrations, configuration documents, map operations, drop commits, dormant layout state, copy, and clone-ready references. |
+| 1. Contracts and generated registry | Complete | None. Major-1 contracts, compile-time registry validation, reusable suites, fakes, samples, screenshots, and repository gates pass. |
+| 2. Persistence and spatial state | Next | Implement the versioned Room model, typed configuration storage, geometry, transactional editing, migrations, and deterministic persistence tests. |
 | 3. Safe launcher vertical slice | Not started | Add Home role onboarding, package and profile adapters, app launching, a safe layout, settings, permission flows, crash markers, quarantine, and diagnostics. |
 | 4. Composition, navigation, and editors | Not started | Build composition, typed slots, capability checks, neighbor loading, gestures, accessible editors, and the first reference modules. |
 | 5. Widgets, shortcuts, profiles, and indicators | Not started | Implement widget and shortcut lifecycles, work-profile behavior, Private Space isolation, notification indicators, item actions, and folder overlays. |
@@ -112,14 +131,8 @@ Run the prototype instrumentation suite separately on an API 35 emulator. The re
 
 ## Recommended next build slice
 
-Start Phase 1 with the five contract documents and generated-registry foundation. ADR 0026 still blocks a public APK until that contract gate passes.
+Begin Phase 2 with the versioned persistence model and spatial-state invariants. ADR 0026's contract-design prerequisite is satisfied; this work did not publish an APK or create a release.
 
 ## Next checkpoint
 
-The next review should expect:
-
-- the five contribution contract specifications;
-- the first generated-registry implementation and compile tests;
-- a first commit and a configured release remote.
-
-The Phase 0 checkpoint is closed. New product work begins with the Phase 1 contracts rather than the empty activity.
+The next review should expect a Phase 2 persistence schema and migration plan grounded in the completed major-1 identities, descriptors, configuration documents, and codecs.

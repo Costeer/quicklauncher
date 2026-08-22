@@ -34,4 +34,5 @@ include(
     ":host:backup",
     ":testing:contracts",
     ":testing:fakes",
+    ":testing:samples",
 )
