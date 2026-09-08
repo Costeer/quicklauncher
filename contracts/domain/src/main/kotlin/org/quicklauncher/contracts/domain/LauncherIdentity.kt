@@ -36,3 +36,28 @@ data class ProfilePackageIdentity(
     val profile: ProfileSerial,
     val packageName: PackageName,
 )
+
+/** A normalized, fully-qualified Android activity class name. */
+@JvmInline
+value class ActivityName private constructor(val value: String) {
+    override fun toString(): String = value
+
+    companion object {
+        private val segment = Regex("[A-Za-z_$][A-Za-z0-9_$]*")
+
+        fun parse(value: String): ActivityName {
+            val segments = value.split('.')
+            require(segments.size >= 2 && segments.all(segment::matches)) {
+                "Invalid Android activity name: $value"
+            }
+            return ActivityName(value)
+        }
+    }
+}
+
+/** Identifies one launchable Android activity within one profile. */
+data class AppActivityIdentity(
+    val profile: ProfileSerial,
+    val packageName: PackageName,
+    val activityName: ActivityName,
+)

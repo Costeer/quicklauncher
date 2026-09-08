@@ -6,12 +6,21 @@ import org.quicklauncher.contracts.contribution.DestinationDraft
 import org.quicklauncher.contracts.contribution.DestinationTemplateContribution
 import org.quicklauncher.contracts.contribution.DestinationTemplateDescriptor
 import org.quicklauncher.contracts.contribution.DisplayText
+import org.quicklauncher.contracts.contribution.EncodedPlacementData
 import org.quicklauncher.contracts.contribution.ModuleDraft
+import org.quicklauncher.contracts.contribution.PlacementData
+import org.quicklauncher.contracts.contribution.PlacementDraft
+import org.quicklauncher.contracts.contribution.PositionedDestinationDraft
+import org.quicklauncher.contracts.contribution.TemplateCoordinate
+import org.quicklauncher.contracts.contribution.TemplateDestinationInput
 import org.quicklauncher.contracts.contribution.TemplateInput
+import org.quicklauncher.contracts.contribution.TemplatePlan
 import org.quicklauncher.contracts.contribution.TemplateResult
 import org.quicklauncher.contracts.domain.CapabilityId
 import org.quicklauncher.contracts.domain.DestinationId
+import org.quicklauncher.contracts.domain.ConfigurationDocumentId
 import org.quicklauncher.contracts.domain.ModuleInstanceId
+import org.quicklauncher.contracts.domain.SchemaVersion
 import org.quicklauncher.contracts.domain.StableKey
 import org.quicklauncher.contracts.ui.PerformanceMetric
 import org.quicklauncher.contracts.ui.PreviewScenario
@@ -42,13 +51,15 @@ private val templateCapability = CapabilityId.parse("org.quicklauncher.capabilit
 object SampleTemplate : DestinationTemplateContribution<SampleConfiguration> {
     override fun create(input: TemplateInput<SampleConfiguration>): TemplateResult {
         input.cancellation.ensureActive()
-        if (!input.configuration.enabled || input.availableInstanceIds.size < 2) {
+        if (!input.configuration.enabled || input.destinations.isEmpty() ||
+            input.availableModuleIdentities.size < 2
+        ) {
             return TemplateResult.Invalid(
                 StableKey.parse("missing-input"),
-                DisplayText.of("Template requires two instance IDs"),
+                DisplayText.of("Template requires one destination and two module identities"),
             )
         }
-        val scenario = input.name.value.substringBefore(' ')
+        val scenario = input.destinations.first().name.value.substringBefore(' ')
         if (scenario !in setOf("normal", "large-text")) {
             return TemplateResult.Invalid(
                 StableKey.parse("$scenario-state"),
@@ -56,19 +67,12 @@ object SampleTemplate : DestinationTemplateContribution<SampleConfiguration> {
             )
         }
         return TemplateResult.Created(
-            DestinationDraft(
-                input.destinationId,
-                input.name,
-                ModuleDraft(
-                    input.availableInstanceIds[0],
-                    SampleIds.LAYOUT,
-                    ConfigurationPipeline.defaultDocument(LayoutConfigurationCodec),
-                ),
+            TemplatePlan(
                 listOf(
-                    ModuleDraft(
-                        input.availableInstanceIds[1],
-                        SampleIds.BLOCK,
-                        ConfigurationPipeline.defaultDocument(BlockConfigurationCodec),
+                    PositionedDestinationDraft(
+                        TemplateCoordinate(0, 0),
+                        sampleDestinationDraft(input),
+                        isStart = true,
                     ),
                 ),
             ),
@@ -103,11 +107,21 @@ object SampleTemplateContract : DestinationTemplateContractDeclaration<SampleCon
     override val fixtures = immutableSampleList(PreviewScenario.entries.map { scenario ->
         val key = scenario.name.lowercase().replace('_', '-')
         val input = TemplateInput(
-            DestinationId.parse("org.quicklauncher.destination/$key"),
-            DisplayText.of("$key destination"),
             listOf(
-                ModuleInstanceId.parse("org.quicklauncher.instance/$key-layout"),
-                ModuleInstanceId.parse("org.quicklauncher.instance/$key-block"),
+                TemplateDestinationInput(
+                    DestinationId.parse("org.quicklauncher.destination/$key"),
+                    DisplayText.of("$key destination"),
+                ),
+            ),
+            listOf(
+                org.quicklauncher.contracts.contribution.ModuleDraftIdentity(
+                    ModuleInstanceId.parse("org.quicklauncher.instance/$key-layout"),
+                    ConfigurationDocumentId.parse("org.quicklauncher.configuration/$key-layout"),
+                ),
+                org.quicklauncher.contracts.contribution.ModuleDraftIdentity(
+                    ModuleInstanceId.parse("org.quicklauncher.instance/$key-block"),
+                    ConfigurationDocumentId.parse("org.quicklauncher.configuration/$key-block"),
+                ),
             ),
             codec.default,
             FakeCancellationSignal(),
@@ -129,19 +143,12 @@ private fun expectedTemplateResult(
     input: TemplateInput<SampleConfiguration>,
 ): TemplateResult = if (scenario in setOf(PreviewScenario.NORMAL, PreviewScenario.LARGE_TEXT)) {
     TemplateResult.Created(
-        DestinationDraft(
-            input.destinationId,
-            input.name,
-            ModuleDraft(
-                input.availableInstanceIds[0],
-                SampleIds.LAYOUT,
-                ConfigurationPipeline.defaultDocument(LayoutConfigurationCodec),
-            ),
+        TemplatePlan(
             listOf(
-                ModuleDraft(
-                    input.availableInstanceIds[1],
-                    SampleIds.BLOCK,
-                    ConfigurationPipeline.defaultDocument(BlockConfigurationCodec),
+                PositionedDestinationDraft(
+                    TemplateCoordinate(0, 0),
+                    sampleDestinationDraft(input),
+                    isStart = true,
                 ),
             ),
         ),
@@ -151,5 +158,41 @@ private fun expectedTemplateResult(
     TemplateResult.Invalid(
         StableKey.parse("$key-state"),
         DisplayText.of("Template preview is in $key state"),
+    )
+}
+
+private fun sampleDestinationDraft(input: TemplateInput<SampleConfiguration>): DestinationDraft {
+    val destination = input.destinations.first()
+    val layoutIdentity = input.availableModuleIdentities[0]
+    val blockIdentity = input.availableModuleIdentities[1]
+    val layout = ModuleDraft(
+        layoutIdentity.instanceId,
+        SampleIds.LAYOUT,
+        layoutIdentity.configurationDocumentId,
+        ConfigurationPipeline.defaultDocument(LayoutConfigurationCodec),
+    )
+    val block = ModuleDraft(
+        blockIdentity.instanceId,
+        SampleIds.BLOCK,
+        blockIdentity.configurationDocumentId,
+        ConfigurationPipeline.defaultDocument(BlockConfigurationCodec),
+    )
+    return DestinationDraft(
+        destination.destinationId,
+        destination.name,
+        layout,
+        listOf(block),
+        listOf(
+            PlacementDraft(
+                parentInstanceId = layout.instanceId,
+                parentSlotId = StableKey.parse("main"),
+                childInstanceId = block.instanceId,
+                index = 0,
+                data = PlacementData(
+                    schemaVersion = SchemaVersion.of(1),
+                    encoded = EncodedPlacementData.of("{}"),
+                ),
+            ),
+        ),
     )
 }

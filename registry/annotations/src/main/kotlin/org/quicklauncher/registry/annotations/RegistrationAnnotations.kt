@@ -4,6 +4,47 @@ import kotlin.reflect.KClass
 
 @Target(AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.SOURCE)
+annotation class AggregateContributionRegistry(
+    val fragments: Array<KClass<*>>,
+    val packageName: String,
+    val registryName: String = "GeneratedContributionRegistry",
+)
+
+@Target(AnnotationTarget.CLASS)
+@Retention(AnnotationRetention.BINARY)
+annotation class ContributionRegistryFragmentManifest(
+    val fragmentId: String,
+    val entries: Array<ContributionRegistryFragmentEntry>,
+)
+
+@Target(AnnotationTarget.ANNOTATION_CLASS)
+@Retention(AnnotationRetention.BINARY)
+annotation class ContributionRegistryFragmentEntry(
+    val index: Int,
+    val contributionId: String,
+    val configTypeId: String,
+    val categoryTypeId: String,
+    val contractMajor: Int = 1,
+    val providedCapabilities: Array<String> = [],
+    val requiredCapabilities: Array<String> = [],
+    val compatibleSlotTypes: Array<String> = [],
+    val occupiedScrollAxes: Array<String> = [],
+    val childSlots: Array<ContributionRegistryFragmentSlot> = [],
+    val requiredContributions: Array<String> = [],
+)
+
+@Target(AnnotationTarget.ANNOTATION_CLASS)
+@Retention(AnnotationRetention.BINARY)
+annotation class ContributionRegistryFragmentSlot(
+    val type: String,
+    val acceptedBlocks: Array<String> = [],
+    val requiredCapabilities: Array<String> = [],
+    val maximumChildren: Int = 1,
+    val allowedScrollAxes: Array<String> = [],
+)
+
+@Target(AnnotationTarget.CLASS)
+@Retention(AnnotationRetention.SOURCE)
 annotation class RegisterLayout(
     val id: String,
     val contractMajor: Int,

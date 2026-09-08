@@ -91,11 +91,13 @@ abstract class CommonContributionContractSuite<C : Any> {
     @Test
     fun `configuration migrations are sequential deterministic and preserve the original`() {
         val cases = contract.configurationCases
+        assertEquals(cases.migrations, contract.codec.migrations)
+        assertImmutableList(contract.codec.migrations)
         assertImmutableList(cases.migrations)
         assertImmutableList(cases.failingMigrations)
-        val migrated = ConfigurationPipeline.load(cases.migrationDocument, contract.codec, cases.migrations)
+        val migrated = ConfigurationPipeline.load(cases.migrationDocument, contract.codec)
             as ConfigurationLoadResult.Loaded
-        val repeated = ConfigurationPipeline.load(cases.migrationDocument, contract.codec, cases.migrations)
+        val repeated = ConfigurationPipeline.load(cases.migrationDocument, contract.codec)
             as ConfigurationLoadResult.Loaded
         assertEquals(cases.expectedMigratedValue, migrated.value)
         assertEquals(contract.codec.currentSchemaVersion, migrated.document.schemaVersion)
@@ -625,21 +627,51 @@ abstract class DestinationTemplateContributionContractSuite<C : Any> : CommonCon
         assertImmutableList(contract.fixtures)
         assertEquals(PreviewScenario.entries.toSet(), contract.fixtures.map { it.scenario }.toSet())
         contract.fixtures.forEach { fixture ->
-            assertImmutableList(fixture.input.availableInstanceIds)
+            assertImmutableList(fixture.input.destinations)
+            assertImmutableList(fixture.input.availableModuleIdentities)
             val first = contract.target.create(fixture.input)
             assertEquals(fixture.expectedResult, first)
             assertEquals(fixture.expectedResult, contract.target.create(fixture.input))
             if (first is TemplateResult.Created) {
                 val descriptor = contract.descriptor as DestinationTemplateDescriptor
-                val draft = first.draft
-                assertEquals(fixture.input.destinationId, draft.id)
-                assertEquals(fixture.input.name, draft.name)
-                assertImmutableList(draft.blocks)
-                assertTrue(draft.blocks.size <= descriptor.maximumBlocks)
-                val modules = listOf(draft.layout) + draft.blocks
+                val plan = first.plan
+                assertImmutableList(plan.destinations)
+                assertEquals(1, plan.destinations.count { it.isStart })
+                val requestedDestinations = fixture.input.destinations.associateBy { it.destinationId }
+                assertTrue(plan.destinations.isNotEmpty())
+                assertTrue(plan.destinations.all { positioned ->
+                    requestedDestinations[positioned.draft.id]?.name == positioned.draft.name
+                })
+                val drafts = plan.destinations.map { it.draft }
+                drafts.forEach { draft ->
+                    assertImmutableList(draft.blocks)
+                    assertImmutableList(draft.placements)
+                }
+                assertTrue(drafts.sumOf { it.blocks.size } <= descriptor.maximumBlocks)
+                val modules = drafts.flatMap { listOf(it.layout) + it.blocks }
                 assertEquals(modules.size, modules.map { it.instanceId }.toSet().size)
-                assertTrue(modules.all { it.instanceId in fixture.input.availableInstanceIds })
+                assertEquals(modules.size, modules.map { it.configurationDocumentId }.toSet().size)
+                val suppliedIdentities = fixture.input.availableModuleIdentities.toSet()
+                assertTrue(modules.all {
+                    org.quicklauncher.contracts.contribution.ModuleDraftIdentity(
+                        it.instanceId,
+                        it.configurationDocumentId,
+                    ) in suppliedIdentities
+                })
                 assertTrue(modules.all { it.contributionId in descriptor.requiredContributions })
+                drafts.forEach { draft -> assertValidDraftTree(draft) }
+                val coordinates = plan.destinations.map { it.coordinate }.toSet()
+                val reachableCoordinates = LinkedHashSet<org.quicklauncher.contracts.contribution.TemplateCoordinate>()
+                val pending = ArrayDeque<org.quicklauncher.contracts.contribution.TemplateCoordinate>()
+                pending += plan.startDestination.coordinate
+                while (pending.isNotEmpty()) {
+                    val coordinate = pending.removeFirst()
+                    if (!reachableCoordinates.add(coordinate)) continue
+                    coordinates.filter(coordinate::isCardinalNeighborOf)
+                        .filterNot(reachableCoordinates::contains)
+                        .forEach(pending::addLast)
+                }
+                assertEquals(coordinates, reachableCoordinates)
             }
         }
     }
@@ -649,13 +681,38 @@ abstract class DestinationTemplateContributionContractSuite<C : Any> : CommonCon
         val source = contract.fixtures.first().input
         val cancelled = ContractCancellationSignal().apply { cancel() }
         val input = org.quicklauncher.contracts.contribution.TemplateInput(
-            source.destinationId,
-            source.name,
-            source.availableInstanceIds,
+            source.destinations,
+            source.availableModuleIdentities,
             source.configuration,
             cancelled,
         )
         assertThrows(CancellationException::class.java) { contract.target.create(input) }
+    }
+
+    private fun assertValidDraftTree(
+        draft: org.quicklauncher.contracts.contribution.DestinationDraft,
+    ) {
+        val modules = listOf(draft.layout) + draft.blocks
+        val blockIds = draft.blocks.map { it.instanceId }.toSet()
+        assertEquals(blockIds, draft.placements.map { it.childInstanceId }.toSet())
+        assertEquals(draft.placements.size, draft.placements.map { it.childInstanceId }.toSet().size)
+        assertTrue(draft.placements.all { it.parentInstanceId in modules.map { module -> module.instanceId } })
+        assertTrue(draft.placements.none { it.childInstanceId == draft.layout.instanceId })
+        assertTrue(draft.placements.all { it.data.schemaVersion.value >= 1 })
+        draft.placements.groupBy { it.parentInstanceId to it.parentSlotId }.values.forEach { siblings ->
+            assertEquals(siblings.indices.toList(), siblings.map { it.index }.sorted())
+        }
+        val childrenByParent = draft.placements.groupBy(
+            keySelector = { it.parentInstanceId },
+            valueTransform = { it.childInstanceId },
+        )
+        val reachable = LinkedHashSet<org.quicklauncher.contracts.domain.ModuleInstanceId>()
+        fun collect(instanceId: org.quicklauncher.contracts.domain.ModuleInstanceId) {
+            if (!reachable.add(instanceId)) return
+            childrenByParent[instanceId].orEmpty().forEach(::collect)
+        }
+        collect(draft.layout.instanceId)
+        assertTrue(reachable.containsAll(blockIds))
     }
 }
 

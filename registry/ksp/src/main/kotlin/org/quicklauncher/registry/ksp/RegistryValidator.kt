@@ -13,9 +13,13 @@ import org.quicklauncher.contracts.domain.SlotTypeId
 import org.quicklauncher.contracts.domain.StableKey
 
 object RegistryValidator {
+    private const val HOST_OWNED_SAFE_LAYOUT_ID = "org.quicklauncher.core/safe-layout"
+    private const val RESERVED_SAFE_LAYOUT_ISSUE = "registry.reserved-safe-layout-identity"
+
     fun validate(
         categories: List<CategoryDefinition>,
         registrations: List<RawRegistration>,
+        allowExternalReferences: Boolean = false,
     ): RegistryValidationResult {
         val issues = mutableListOf<RegistryValidationIssue>()
         validateCategories(categories, issues)
@@ -53,7 +57,7 @@ object RegistryValidator {
                 message = "Capability dependency cycle: ${cycle.joinToString(" -> ")}",
             )
         }
-        validateBlockNesting(validated, issues)
+        validateBlockNesting(validated, issues, allowExternalReferences)
 
         val sortedIssues = issues.distinct().sortedWith(
             compareBy(RegistryValidationIssue::targetName, RegistryValidationIssue::code, RegistryValidationIssue::message),
@@ -117,6 +121,7 @@ object RegistryValidator {
             raw,
             "Contribution '${raw.id}' has invalid config type '${raw.configTypeId}'",
         )
+        validateReservedSafeLayoutIdentity(raw, issues)
         val categoryType = parse(raw.kind.persistedTypeId, ContributionTypeId::parse)
 
         if (category == null || raw.contractMajor !in category.supportedMajors) {
@@ -154,6 +159,28 @@ object RegistryValidator {
 
         if (id == null || configType == null || categoryType == null) return null
         return ValidatedRegistration(raw, id, configType, categoryType, provided, required)
+    }
+
+    private fun validateReservedSafeLayoutIdentity(
+        raw: RawRegistration,
+        issues: MutableList<RegistryValidationIssue>,
+    ) {
+        if (raw.id == HOST_OWNED_SAFE_LAYOUT_ID) {
+            issues += issue(
+                RESERVED_SAFE_LAYOUT_ISSUE,
+                raw,
+                "Contribution '${raw.targetName}' uses contribution ID '$HOST_OWNED_SAFE_LAYOUT_ID', " +
+                    "which is reserved for the host-owned safe layout",
+            )
+        }
+        if (raw.configTypeId == HOST_OWNED_SAFE_LAYOUT_ID) {
+            issues += issue(
+                RESERVED_SAFE_LAYOUT_ISSUE,
+                raw,
+                "Contribution '${raw.targetName}' uses configuration type ID '$HOST_OWNED_SAFE_LAYOUT_ID', " +
+                    "which is reserved for the host-owned safe layout",
+            )
+        }
     }
 
     private fun validateImplementationDeclarations(
@@ -561,6 +588,7 @@ object RegistryValidator {
     private fun validateBlockNesting(
         registrations: List<ValidatedRegistration>,
         issues: MutableList<RegistryValidationIssue>,
+        allowExternalReferences: Boolean,
     ) {
         val blocksById = registrations
             .filter { it.raw.kind == RegistrationKind.BLOCK }
@@ -577,11 +605,14 @@ object RegistryValidator {
                 slot.acceptedBlocks.sorted().forEach { acceptedId ->
                     val child = blocksById[acceptedId]
                     if (child == null) {
-                        issues += issue(
-                            "registry.unsupported-slot-nesting",
-                            parent.raw,
-                            "Contribution '${parent.raw.id}' slot '${slot.id}' accepts unknown block '$acceptedId'",
-                        )
+                        if (!allowExternalReferences) {
+                            issues += issue(
+                                "registry.unsupported-slot-nesting",
+                                parent.raw,
+                                "Contribution '${parent.raw.id}' slot '${slot.id}' accepts unknown block " +
+                                    "'$acceptedId'",
+                            )
+                        }
                         return@forEach
                     }
                     val childSpecific = child.raw.specific as RawSpecificDescriptor.Block

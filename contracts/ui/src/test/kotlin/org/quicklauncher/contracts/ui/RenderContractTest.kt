@@ -19,6 +19,10 @@ class RenderContractTest {
                 ModuleInstanceId.parse("org.quicklauncher.instance/child"),
                 ContributionId.parse("org.quicklauncher.samples/child"),
                 0,
+                PlacementRenderData(
+                    schemaVersion = 3,
+                    encoded = EncodedPlacement.of("{\"column\":2}"),
+                ),
             ),
         )
         val source = mutableListOf(
@@ -45,9 +49,21 @@ class RenderContractTest {
 
         assertEquals(listOf("main"), state.slots.map { it.id.value })
         assertEquals(1, state.slots.single().placements.size)
+        assertEquals(3, state.slots.single().placements.single().placement.schemaVersion)
+        assertEquals(
+            "{\"column\":2}",
+            state.slots.single().placements.single().placement.encoded.value,
+        )
         assertThrows(UnsupportedOperationException::class.java) {
             @Suppress("UNCHECKED_CAST")
             (state.slots as MutableList<SlotRenderState>).clear()
+        }
+    }
+
+    @Test
+    fun `placement render data requires a positive schema version`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            PlacementRenderData(0, EncodedPlacement.of("{}"))
         }
     }
 

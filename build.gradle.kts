@@ -15,6 +15,9 @@ plugins {
     alias(libs.plugins.ksp) apply false
     alias(libs.plugins.licensee) apply false
     alias(libs.plugins.paparazzi) apply false
+    alias(libs.plugins.androidx.room3) apply false
+    alias(libs.plugins.protobuf) apply false
+    alias(libs.plugins.kotlin.serialization) apply false
     alias(libs.plugins.dependency.analysis)
 }
 
@@ -29,11 +32,6 @@ dependencyAnalysis {
         // These modules intentionally have no source until their contract or host phase begins.
         // Remove each exception when that module gains its first source file.
         listOf(
-            ":host:runtime",
-            ":host:data",
-            ":host:platform",
-            ":host:editor",
-            ":host:settings",
             ":host:backup",
         ).forEach { placeholderPath ->
             project(placeholderPath) {
@@ -97,6 +95,14 @@ dependencyAnalysis {
                     "androidx.compose.runtime:runtime-desktop",
                     "androidx.compose.ui:ui-jvmstubs",
                 )
+            }
+        }
+        project(":host:data") {
+            onIncorrectConfiguration {
+                // DataStore appears only in a private constructor/internal serializer. Java-lite
+                // generated messages are persistence details packaged in this internal host module.
+                // Neither belongs on downstream compile classpaths despite their public JVM bytecode.
+                exclude(libs.androidx.datastore.core, libs.protobuf.java.lite)
             }
         }
     }
@@ -165,6 +171,12 @@ tasks.register("checkModuleBoundaries") {
                                 target.startsWith(":contracts:")
                             owner.path == ":registry:ksp" ->
                                 target.startsWith(":contracts:") || target == ":registry:annotations"
+                            owner.path == ":registry:production" && isKspDependency ->
+                                target == ":registry:ksp"
+                            owner.path == ":registry:production" ->
+                                target.startsWith(":contracts:") ||
+                                    target.startsWith(":modules:") ||
+                                    target == ":registry:annotations"
                             owner.path == ":testing:contracts" || owner.path == ":testing:fakes" ->
                                 target.startsWith(":contracts:")
                             owner.path == ":testing:samples" && isKspDependency ->

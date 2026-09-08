@@ -478,6 +478,7 @@ A default home app must always expose a route back to app launching and Settings
 
 - The core safe layout cannot be removed or supplied by an optional contribution module.
 - It shows an alphabetical app list, search command, map overview, and Settings.
+- App visibility policy loads independently from the map aggregate. If that policy cannot be read, ordinary collections fail closed and host Settings retains a typed platform-app recovery list.
 - Missing contribution code preserves raw instance configuration and shows an explanatory editor placeholder.
 - Configuration migration failure quarantines only the affected instance.
 - Renderer invocation uses a best-effort error guard and supervised coroutine scope.
@@ -616,8 +617,11 @@ Exit criteria: randomized map edits never violate uniqueness or reachability; ba
 
 - Implement the Home activity, role onboarding, package and profile adapters, app launching, and the safe layout.
 - Implement the app catalog with profile serial identities and package callbacks.
-- Implement host-owned Settings, map overview entry, recovery actions, and contextual permission flows.
+- Implement host-owned Settings, map overview entry, quarantine inspection, automatic safe fallback,
+  and contextual permission flows. Renderer retry is enabled only when a real renderer is installed.
 - Add crash markers, quarantine, and local diagnostics.
+- Use the working safe layout as the development-time preview before the explicit Home-role action.
+  Do not add inert template choices before their layouts and blocks can render.
 
 Exit criteria: Quicklauncher can become the default home app, launch profile-aware apps, return to the start destination on Home, and recover from a deliberately crashing test renderer.
 
@@ -628,6 +632,11 @@ Exit criteria: Quicklauncher can become the default home app, launch profile-awa
 - Add nested-scroll handoff and edge-only mode.
 - Build map and destination editors with accessible non-drag alternatives.
 - Implement grid, single-block, alphabetical-app, app-grid, favorites or dock, folder, and clock or date modules.
+- Complete quarantined-module reset, replacement, and deletion through the real contribution and
+  configuration editors. These actions must preserve the original document until the replacement
+  validates; Phase 3 does not pretend to repair contributions that are not installed yet.
+- Complete ADR 0028 onboarding with modular, traditional, and blank template selection and
+  configuration before any public launcher build.
 
 Exit criteria: the modular sample works end to end. A developer can add a test block in one Gradle module without changing host implementation code.
 
@@ -667,7 +676,7 @@ Exit criteria: every reference module renders from the same host theme, invalid 
 - Implement user-selected folders, gallery scanning, previews, manual backups, and nightly seven-snapshot rotation.
 - Add passphrase encryption, plaintext warning, staged validation, pre-restore backup, and atomic replacement.
 - Add Android backup rules, permission reauthorization, widget rebinding, and profile review.
-- Add support-bundle export.
+- Add quarantined-state and redacted support-bundle export.
 
 Exit criteria: archive round trips pass across app versions, corrupt archives cannot alter live data, and restores always leave the safe layout reachable.
 

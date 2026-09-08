@@ -32,6 +32,9 @@ interface ConfigurationCodec<T> {
     val configType: ConfigTypeId
     val currentSchemaVersion: SchemaVersion
     val default: T
+    /** The complete production migration path for saved documents supported by this codec. */
+    val migrations: List<ConfigurationMigration>
+        get() = emptyList()
 
     fun encode(value: T): EncodedConfiguration
 
@@ -92,6 +95,11 @@ object ConfigurationPipeline {
             schemaVersion = codec.currentSchemaVersion,
             encoded = codec.encode(value),
         )
+
+    fun <T> load(
+        document: ConfigurationDocument,
+        codec: ConfigurationCodec<T>,
+    ): ConfigurationLoadResult<T> = load(document, codec, codec.migrations)
 
     fun <T> load(
         document: ConfigurationDocument,

@@ -84,6 +84,48 @@ value class ModuleInstanceId private constructor(val value: String) {
 }
 
 @JvmInline
+value class ConfigurationDocumentId private constructor(val value: String) {
+    override fun toString(): String = value
+
+    companion object {
+        fun parse(value: String): ConfigurationDocumentId =
+            ConfigurationDocumentId(
+                StableIdentityFormat.requireNamespaced("ConfigurationDocumentId", value),
+            )
+    }
+}
+
+@JvmInline
+value class PlacementId private constructor(val value: String) {
+    override fun toString(): String = value
+
+    companion object {
+        fun parse(value: String): PlacementId =
+            PlacementId(StableIdentityFormat.requireNamespaced("PlacementId", value))
+    }
+}
+
+@JvmInline
+value class ThemeProfileId private constructor(val value: String) {
+    override fun toString(): String = value
+
+    companion object {
+        fun parse(value: String): ThemeProfileId =
+            ThemeProfileId(StableIdentityFormat.requireNamespaced("ThemeProfileId", value))
+    }
+}
+
+@JvmInline
+value class CrashMarkerId private constructor(val value: String) {
+    override fun toString(): String = value
+
+    companion object {
+        fun parse(value: String): CrashMarkerId =
+            CrashMarkerId(StableIdentityFormat.requireNamespaced("CrashMarkerId", value))
+    }
+}
+
+@JvmInline
 value class DestinationId private constructor(val value: String) {
     override fun toString(): String = value
 
@@ -100,6 +142,19 @@ value class ContentItemId private constructor(val value: String) {
     companion object {
         fun parse(value: String): ContentItemId =
             ContentItemId(StableIdentityFormat.requireNamespaced("ContentItemId", value))
+    }
+}
+
+/** An Android shortcut ID, scoped by its owning profile and package. */
+@JvmInline
+value class ShortcutId private constructor(val value: String) {
+    override fun toString(): String = value
+
+    companion object {
+        fun parse(value: String): ShortcutId {
+            require(value.isNotBlank()) { "ShortcutId must not be blank" }
+            return ShortcutId(value)
+        }
     }
 }
 

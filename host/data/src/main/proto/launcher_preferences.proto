@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package org.quicklauncher.host.data.preferences.proto;
+
+option java_package = "org.quicklauncher.host.data.preferences.proto";
+option java_multiple_files = true;
+
+message StoredLauncherPreferences {
+  uint32 schema_version = 1;
+  StoredGestureMode gesture_mode = 2;
+  repeated string enabled_search_provider_ids = 3;
+  StoredHistoryPolicy history_policy = 4;
+  optional string theme_profile_id = 5;
+  StoredNotificationStyle notification_style = 6;
+  StoredOnboardingState onboarding_state = 7;
+}
+
+enum StoredGestureMode {
+  STORED_GESTURE_MODE_UNSPECIFIED = 0;
+  STORED_GESTURE_MODE_CONTENT_HANDOFF = 1;
+  STORED_GESTURE_MODE_EDGE_ACTIVATION = 2;
+}
+
+enum StoredHistoryPolicy {
+  STORED_HISTORY_POLICY_UNSPECIFIED = 0;
+  STORED_HISTORY_POLICY_DISABLED = 1;
+  STORED_HISTORY_POLICY_LOCAL = 2;
+}
+
+enum StoredNotificationStyle {
+  STORED_NOTIFICATION_STYLE_UNSPECIFIED = 0;
+  STORED_NOTIFICATION_STYLE_HIDDEN = 1;
+  STORED_NOTIFICATION_STYLE_DOT = 2;
+  STORED_NOTIFICATION_STYLE_APPROXIMATE_COUNT = 3;
+}
+
+enum StoredOnboardingState {
+  STORED_ONBOARDING_STATE_UNSPECIFIED = 0;
+  STORED_ONBOARDING_STATE_NOT_STARTED = 1;
+  STORED_ONBOARDING_STATE_IN_PROGRESS = 2;
+  STORED_ONBOARDING_STATE_COMPLETED = 3;
+}

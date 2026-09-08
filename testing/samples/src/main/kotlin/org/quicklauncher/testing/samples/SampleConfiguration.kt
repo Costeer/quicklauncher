@@ -21,6 +21,8 @@ abstract class SampleConfigurationCodec(
 ) : ConfigurationCodec<SampleConfiguration> {
     final override val currentSchemaVersion: SchemaVersion = SchemaVersion.of(3)
     final override val default: SampleConfiguration = SampleConfiguration(true, "sample")
+    final override val migrations: List<ConfigurationMigration> =
+        sampleMigrations(configType, failAtSecondStep = false)
 
     final override fun encode(value: SampleConfiguration): EncodedConfiguration =
         EncodedConfiguration.of("enabled=${value.enabled};label=${value.label}")
@@ -66,7 +68,7 @@ object TemplateConfigurationCodec : SampleConfigurationCodec(
 fun sampleConfigurationCases(
     codec: ConfigurationCodec<SampleConfiguration>,
 ): ConfigurationContractCases<SampleConfiguration> {
-    val migrations = sampleMigrations(codec.configType, failAtSecondStep = false)
+    val migrations = codec.migrations
     val failingMigrations = sampleMigrations(codec.configType, failAtSecondStep = true)
     return ConfigurationContractCases(
         roundTripValue = SampleConfiguration(false, "round-trip"),

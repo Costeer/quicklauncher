@@ -14,19 +14,21 @@ The [shared seam rules](shared-contract-rules.md#purpose-and-the-host-contributi
 
 The [shared identity rules](shared-contract-rules.md#stable-identity-and-descriptor-metadata) apply. A `DestinationTemplateDescriptor` has `ContributionMetadata` whose `typeId` is exactly `ContributionTypes.DESTINATION_TEMPLATE`, an immutable set of required contribution IDs, and a nonnegative `maximumBlocks`.
 
-`TemplateInput` supplies the host-selected `DestinationId`, validated name, immutable pool of available `ModuleInstanceId` values, decoded template configuration, and cancellation signal. A `DestinationDraft` contains that destination ID and name, one layout `ModuleDraft`, and an immutable list of block drafts. Each module draft contains an instance ID, contribution ID, and configuration document.
+`TemplateInput` supplies the host-selected `DestinationId`, validated name, immutable pool of available `ModuleInstanceId` values, decoded template configuration, and cancellation signal. A `DestinationDraft` contains that destination ID and name, one layout-root `ModuleDraft`, immutable block drafts, and immutable `PlacementDraft` values that form the complete composition tree. Each module draft contains an instance ID, contribution ID, and configuration document. Each placement identifies a known parent instance, a validated parent-slot key, one child block instance, its zero-based sibling index, and typed `PlacementData`.
 
 ## Contract-major compatibility
 
-The [shared compatibility rules](shared-contract-rules.md#contract-major-compatibility) apply. Destination-template major 1 consists of `DestinationTemplateContribution`, `TemplateInput`, `TemplateResult`, `DestinationDraft`, `ModuleDraft`, `DestinationTemplateDescriptor`, and their purity and validation rules. The registry rejects any template major other than 1.
+The [shared compatibility rules](shared-contract-rules.md#contract-major-compatibility) apply. Destination-template major 1 consists of `DestinationTemplateContribution`, `TemplateInput`, `TemplateResult`, `DestinationDraft`, `ModuleDraft`, `PlacementDraft`, `PlacementData`, `EncodedPlacementData`, `DestinationTemplateDescriptor`, and their purity and validation rules. The registry rejects any template major other than 1.
 
-Changing from one-destination output, changing identity allocation ownership, or changing draft meaning incompatibly requires a later template contract major. It does not change destinations already created.
+Major 1 preserves the original one-destination intent: the layout remains the single root, `blocks` remains the complete set of non-root modules, and the host still owns persistent placement identities. Placement drafts make the previously implicit flat relationship explicit before any public template result is persisted. Changing from one-destination output, changing identity allocation ownership, allowing a non-layout root, or changing draft-tree meaning incompatibly requires a later template contract major. It does not change destinations already created.
 
 ## Configuration documents and schema versions
 
 The [shared configuration rules](shared-contract-rules.md#configuration-documents-and-schema-versions) apply. Template configuration describes options used to construct a draft. It does not become a hidden template marker on the created destination.
 
 Every template registers its own codec, including a template without options. Each `ModuleDraft.configuration` uses the target module's config type and schema. The host validates and later persists those documents. Updating template configuration or defaults does not rewrite destinations already created.
+
+Placement data evolves independently from both the template configuration and each module configuration. `PlacementData.schemaVersion` is a positive `SchemaVersion`; `PlacementData.encoded` is opaque `EncodedPlacementData` owned by the parent layout or block. The template and host preserve those bytes without normalization. The referenced parent contribution must understand the declared placement schema before the host commits the draft.
 
 ## Lifecycle and cancellation
 
@@ -36,19 +38,19 @@ Creation must not retain its input or start background work. If cancellation is 
 
 ## Immutable inputs and typed outputs or actions
 
-The [shared immutable-data rules](shared-contract-rules.md#immutable-inputs-and-typed-outputs-or-actions) apply. `TemplateInput.availableInstanceIds` is an immutable snapshot. The template chooses distinct IDs from that pool for the layout and block drafts. It does not synthesize raw identity strings.
+The [shared immutable-data rules](shared-contract-rules.md#immutable-inputs-and-typed-outputs-or-actions) apply. `TemplateInput.availableInstanceIds`, `DestinationDraft.blocks`, and `DestinationDraft.placements` are immutable snapshots. The template chooses distinct IDs from that pool for the layout and block drafts. It does not synthesize raw identity strings.
 
-`TemplateResult` is either `Created(DestinationDraft)` or `Invalid(code, message)`. `Invalid` uses a stable local code and validated `DisplayText`. A template emits no callback or executable action. Its draft is declarative data for host validation.
+`TemplateResult` is either `Created(DestinationDraft)` or `Invalid(code, message)`. `Invalid` uses a stable local code and validated `DisplayText`. A template emits no callback or executable action. Its draft is declarative data for host validation. `DestinationDraft` rejects an invalid tree at construction, so a `Created` result cannot carry partial or structurally ambiguous placement state.
 
 ## Host responsibilities
 
-The [shared host rules](shared-contract-rules.md#host-responsibilities) apply. Before creation, the host checks that every descriptor-required contribution is registered and supplies sufficient instance IDs. After creation, it validates destination identity, name, module categories, instance uniqueness, configuration type and schema, block count, capabilities, and layout/block compatibility.
+The [shared host rules](shared-contract-rules.md#host-responsibilities) apply. Before creation, the host checks that every descriptor-required contribution is registered and supplies sufficient instance IDs. After creation, it validates destination identity, name, module categories, instance uniqueness, configuration type and schema, block count, capabilities, parent-slot existence, slot compatibility, maximum children, and parent-owned placement-schema support. Structural tree invariants are also enforced by `DestinationDraft` itself and must not be weakened by a persistence adapter.
 
 The host owns map coordinates, start-destination designation, connectivity, persistence, atomic commit, first-run composition of several templates, and cleanup. An invalid or cancelled template operation leaves live state unchanged.
 
 ## Contribution responsibilities
 
-The [shared contribution rules](shared-contract-rules.md#contribution-responsibilities) apply. A template deterministically creates one draft from its input, uses only declared required contributions, stays within `maximumBlocks`, selects only supplied instance IDs, and provides configuration documents accepted by the referenced contributions' codecs.
+The [shared contribution rules](shared-contract-rules.md#contribution-responsibilities) apply. A template deterministically creates one draft from its input, uses only declared required contributions, stays within `maximumBlocks`, selects only supplied instance IDs, provides configuration documents accepted by the referenced contributions' codecs, and places every block exactly once beneath the layout root.
 
 It must not inspect the registry through reflection, construct contribution targets, reserve map coordinates, select the start destination, persist data, or retain a relationship to the created destination.
 
@@ -64,11 +66,17 @@ The [shared validation rules](shared-contract-rules.md#invariants-and-invalid-st
 - a block whose contribution is not a registered block;
 - a module contribution absent from `requiredContributions`;
 - a reused or unsupplied module instance ID;
+- a placement whose parent is not the layout or a declared block;
+- a placement whose child is not a declared block, is the layout root, or is already another placement's child;
+- a declared block without exactly one placement;
+- a cyclic placement graph or any block unreachable from the layout root;
+- sibling indexes that are not exactly contiguous from zero within each parent-slot pair;
+- non-positive placement-data schema versions;
 - more block drafts than `maximumBlocks`;
 - a configuration document whose type has no matching target codec or cannot load;
 - an incompatible layout/block composition.
 
-The draft represents one destination. It contains no coordinate, start flag, or template type marker.
+The draft represents one destination. It contains no coordinate, start flag, persistent placement ID, or template type marker. An empty block set therefore has an empty placement set. Every non-empty draft is a rooted tree rather than a general graph.
 
 ## Errors and recovery
 
@@ -96,7 +104,7 @@ Empty creates a valid destination with no blocks when the descriptor permits it.
 
 ## Black-box contract suite
 
-The [shared suite rules](shared-contract-rules.md#black-box-contract-suite) apply. The template suite calls only `create`, compares repeated calls for deterministic output, verifies input snapshots, checks instance-ID use and uniqueness, validates the layout and block references, and confirms that failure or cancellation produces no partial state.
+The [shared suite rules](shared-contract-rules.md#black-box-contract-suite) apply. The template suite calls only `create`, compares repeated calls for deterministic output, verifies input and output snapshots, checks instance-ID use and uniqueness, validates layout and block references, and confirms that failure or cancellation produces no partial state. For every created draft it verifies an immutable placement list, exactly one placement per block, known parents and children, a root that is never a child, reachability from the layout root, positive placement schemas, and contiguous indexes per parent slot.
 
 It also covers descriptor and exact-major validation, configuration defaults and round trips, sequential migrations and original preservation, all fixtures, one-destination output, maximum block count, and the `DRAFT_CREATION` hook.
 
@@ -110,4 +118,4 @@ The codec's `ConfigurationCodecSpec` ID must equal the registration's `configTyp
 
 The [shared evolution rules](shared-contract-rules.md#contract-and-category-evolution) apply. Later destination-template majors keep the persisted template type ID and stable contribution/config identities. A destination created under an older version remains an ordinary destination and does not migrate with the template.
 
-New template options use configuration schema evolution. Changing draft behavior must preserve old saved template configuration or migrate it sequentially. A later contribution category cannot renumber the template category.
+New template options use configuration schema evolution. Parent contributions evolve opaque placement data through their placement schema without changing the template configuration schema. Changing draft behavior must preserve old saved template configuration or migrate it sequentially. A later contribution category cannot renumber the template category.

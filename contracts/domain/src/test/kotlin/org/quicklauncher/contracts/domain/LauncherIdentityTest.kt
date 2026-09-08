@@ -48,4 +48,55 @@ class LauncherIdentityTest {
         assertNotEquals(personal, work)
         assertEquals(personal, ProfilePackageIdentity(ProfileSerial.of(0), packageName))
     }
+
+    @Test
+    fun `activity name preserves a normalized Android activity class`() {
+        val activityName = ActivityName.parse("org.example.calendar.MainActivity")
+
+        assertEquals("org.example.calendar.MainActivity", activityName.value)
+        assertEquals("org.example.calendar.MainActivity", activityName.toString())
+    }
+
+    @Test
+    fun `activity name rejects relative and malformed class names`() {
+        listOf(
+            "",
+            " ",
+            ".MainActivity",
+            "MainActivity",
+            "org.example.Main Activity",
+            "org/example/MainActivity",
+            "org..example.MainActivity",
+        ).forEach { value ->
+            assertThrows(IllegalArgumentException::class.java) {
+                ActivityName.parse(value)
+            }
+        }
+    }
+
+    @Test
+    fun `activity identity distinguishes activities within one profile and package`() {
+        val profile = ProfileSerial.of(0)
+        val packageName = PackageName.parse("org.example.calendar")
+        val main = AppActivityIdentity(
+            profile = profile,
+            packageName = packageName,
+            activityName = ActivityName.parse("org.example.calendar.MainActivity"),
+        )
+        val settings = AppActivityIdentity(
+            profile = profile,
+            packageName = packageName,
+            activityName = ActivityName.parse("org.example.calendar.SettingsActivity"),
+        )
+
+        assertNotEquals(main, settings)
+        assertEquals(
+            main,
+            AppActivityIdentity(
+                profile = ProfileSerial.of(0),
+                packageName = PackageName.parse("org.example.calendar"),
+                activityName = ActivityName.parse("org.example.calendar.MainActivity"),
+            ),
+        )
+    }
 }

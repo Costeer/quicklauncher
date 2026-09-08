@@ -166,6 +166,171 @@ jobs:
           :testing:fakes:licensee
           :testing:samples:licensee
 
+  phase-two-persistence:
+    name: Phase 2 persistence and spatial state
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Java 17
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+
+      - name: Install Android SDK
+        run: sdkmanager "platforms;android-36" "build-tools;35.0.0"
+
+      - name: Build, lint, and test persistence
+        run: >-
+          ./gradlew --stacktrace
+          :host:data:assembleDebug
+          :host:data:assembleRelease
+          :host:data:lintDebug
+          :host:data:testDebugUnitTest
+          :host:data:testReleaseUnitTest
+          :host:data:licensee
+          :host:platform:assembleDebug
+          :host:platform:assembleRelease
+          :host:platform:lintDebug
+          :host:platform:licensee
+
+      - name: Verify checked-in Room schemas
+        run: |
+          schema_status="$(git status --porcelain --untracked-files=all -- host/data/schemas)"
+          if [[ -n "$schema_status" ]]; then
+            echo "Room schema exports are stale or untracked:"
+            echo "$schema_status"
+            exit 1
+          fi
+
+  phase-two-persistence-emulator:
+    name: Phase 2 persistence API 35 emulator
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Java 17
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+
+      - name: Install compile SDK
+        run: sdkmanager "platforms;android-36" "build-tools;35.0.0"
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run persistence instrumentation tests
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
+        with:
+          api-level: 35
+          target: aosp_atd
+          arch: x86_64
+          profile: pixel_7
+          script: ./gradlew --stacktrace :host:data:connectedDebugAndroidTest
+
+  phase-three-safe-launcher:
+    name: Phase 3 safe launcher
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Java 17
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+
+      - name: Install Android SDK
+        run: sdkmanager "platforms;android-36" "build-tools;35.0.0"
+
+      - name: Build, lint, test, and verify launcher visuals
+        run: >-
+          ./gradlew --stacktrace
+          :host:runtime:assembleDebug
+          :host:runtime:assembleRelease
+          :host:runtime:lintDebug
+          :host:runtime:testDebugUnitTest
+          :host:runtime:testReleaseUnitTest
+          :host:runtime:verifyPaparazziDebug
+          :host:runtime:licensee
+          :host:settings:assembleDebug
+          :host:settings:assembleRelease
+          :host:settings:lintDebug
+          :host:settings:testDebugUnitTest
+          :host:settings:testReleaseUnitTest
+          :host:settings:verifyPaparazziDebug
+          :host:settings:licensee
+          :host:platform:testDebugUnitTest
+          :host:platform:testReleaseUnitTest
+
+  phase-three-safe-launcher-emulator:
+    name: Phase 3 safe launcher API 35 emulator
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Java 17
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+
+      - name: Install compile SDK
+        run: sdkmanager "platforms;android-36" "build-tools;35.0.0"
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run Home, app-catalog, persistence, and recovery tests
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
+        with:
+          api-level: 35
+          target: aosp_atd
+          arch: x86_64
+          profile: pixel_7
+          script: ./gradlew --stacktrace :app:connectedStableDebugAndroidTest
+
   nested-scroll-emulator:
     name: Nested-scroll API 35 emulator
     runs-on: ubuntu-latest

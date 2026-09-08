@@ -15,6 +15,150 @@ import org.jetbrains.kotlin.compiler.plugin.ExperimentalCompilerApi
 @OptIn(ExperimentalCompilerApi::class)
 class ContributionProcessorCompileTest {
     @Test
+    fun `fragment generation options produce a unique named manifest`() {
+        val outcome = compileWithOptions(
+            mapOf(
+                "quicklauncher.registry.fragment.package" to "compiletest.unique",
+                "quicklauncher.registry.fragment.name" to "UniqueFixtureFragment",
+                "quicklauncher.registry.fragment.id" to "org.quicklauncher.fragment/unique-fixture",
+            ),
+            candidateSource(
+                declarations = layout(
+                    "UniqueLayout",
+                    "org.quicklauncher.samples/unique-layout",
+                    "unique-layout-config",
+                ),
+            ),
+        )
+
+        assertEquals(outcome.messages, KotlinCompilation.ExitCode.OK, outcome.result.exitCode)
+        val generated = outcome.generated("UniqueFixtureFragment.kt")
+        assertTrue(generated.startsWith("package compiletest.unique"))
+        assertTrue(generated.contains("fragmentId = \"org.quicklauncher.fragment/unique-fixture\""))
+        assertTrue(generated.contains("object UniqueFixtureFragment"))
+    }
+
+    @Test
+    fun `binary fragment manifests aggregate from compiled dependency modules`() {
+        val fragmentModule = compile(compiledFragmentSource())
+        assertEquals(fragmentModule.messages, KotlinCompilation.ExitCode.OK, fragmentModule.result.exitCode)
+
+        val application = compileWithClasspaths(
+            listOf(fragmentModule.result.outputDirectory),
+            emptyMap(),
+            SourceFile.kotlin(
+                "ApplicationAggregation.kt",
+                """
+                package application
+
+                import compiledfragment.CompiledFragment
+                import org.quicklauncher.registry.annotations.AggregateContributionRegistry
+
+                @AggregateContributionRegistry(
+                    fragments = [CompiledFragment::class],
+                    packageName = "application.generated",
+                    registryName = "CompiledApplicationRegistry",
+                )
+                object ApplicationAggregation
+                """.trimIndent(),
+            ),
+        )
+
+        assertEquals(application.messages, KotlinCompilation.ExitCode.OK, application.result.exitCode)
+        val generated = application.generated("CompiledApplicationRegistry.kt")
+        assertTrue(generated.contains("compiledfragment.CompiledFragment.entries[0]"))
+        assertFalse(generated.contains("reflect"))
+    }
+
+    @Test
+    fun `explicit fragments aggregate in stable category and contribution order without reflection`() {
+        val forward = compile(aggregationSource(reverseFragments = false))
+        val reverse = compile(aggregationSource(reverseFragments = true))
+
+        assertEquals(forward.messages, KotlinCompilation.ExitCode.OK, forward.result.exitCode)
+        assertEquals(reverse.messages, KotlinCompilation.ExitCode.OK, reverse.result.exitCode)
+        val generated = forward.generated("ApplicationContributionRegistry.kt")
+        assertEquals(generated, reverse.generated("ApplicationContributionRegistry.kt"))
+        assertTrue(generated.indexOf("BlockFragment.entries[0]") < generated.indexOf("LayoutFragment.entries[0]"))
+        assertTrue(generated.indexOf("LayoutFragment.entries[0]") < generated.indexOf("LayoutFragment.entries[1]"))
+        assertFalse(generated.contains("Class.forName"))
+        assertFalse(generated.contains("ServiceLoader"))
+        assertFalse(generated.contains("kotlin.reflect"))
+    }
+
+    @Test
+    fun `duplicate contribution IDs across fragments fail aggregation`() {
+        val outcome = compile(aggregationSource(duplicateContributionId = true))
+
+        assertFailure(
+            outcome,
+            "registry.duplicate-contribution-id",
+            "compiletest.AggregateApplicationRegistry",
+            "org.quicklauncher.samples/layout-a",
+        )
+    }
+
+    @Test
+    fun `duplicate configuration type IDs across fragments fail aggregation`() {
+        val outcome = compile(aggregationSource(duplicateConfigTypeId = true))
+
+        assertFailure(
+            outcome,
+            "registry.duplicate-config-type",
+            "compiletest.AggregateApplicationRegistry",
+            "org.quicklauncher.samples/layout-a-config",
+        )
+    }
+
+    @Test
+    fun `slot incompatibility across fragments fails aggregation`() {
+        val outcome = compile(aggregationSource(incompatibleSlot = true))
+
+        assertFailure(
+            outcome,
+            "registry.slot-compatibility",
+            "compiletest.AggregateApplicationRegistry",
+            "org.quicklauncher.slot/content",
+        )
+    }
+
+    @Test
+    fun `unsupported contract majors in fragments fail aggregation`() {
+        val outcome = compile(aggregationSource(unsupportedMajor = true))
+
+        assertFailure(
+            outcome,
+            "registry.unsupported-contract-major",
+            "compiletest.AggregateApplicationRegistry",
+            "major 2",
+        )
+    }
+
+    @Test
+    fun `capability cycles across fragments fail aggregation`() {
+        val outcome = compile(aggregationSource(capabilityCycle = true))
+
+        assertFailure(
+            outcome,
+            "registry.capability-cycle",
+            "compiletest.AggregateApplicationRegistry",
+            "org.quicklauncher.samples/block-a",
+        )
+    }
+
+    @Test
+    fun `block nesting cycles across fragments fail aggregation`() {
+        val outcome = compile(aggregationSource(blockCycle = true))
+
+        assertFailure(
+            outcome,
+            "registry.block-nesting-cycle",
+            "compiletest.AggregateApplicationRegistry",
+            "block-a",
+        )
+    }
+
+    @Test
     fun `one valid sample of every contribution type compiles in deterministic registry order`() {
         val compilation = compile(validFiveSource())
 
@@ -106,6 +250,47 @@ class ContributionProcessorCompileTest {
         )
 
         assertFailure(outcome, "registry.invalid-config-type", "InvalidConfigType", "not-namespaced")
+    }
+
+    @Test
+    fun `host owned safe layout contribution ID fails compilation`() {
+        val outcome = compile(
+            candidateSource(
+                declarations = layout(
+                    target = "ReservedContribution",
+                    id = "org.quicklauncher.core/safe-layout",
+                    config = "reserved-contribution-config",
+                ),
+            ),
+        )
+
+        assertFailure(
+            outcome,
+            "registry.reserved-safe-layout-identity",
+            "ReservedContribution",
+            "contribution ID 'org.quicklauncher.core/safe-layout'",
+        )
+    }
+
+    @Test
+    fun `host owned safe layout configuration type ID fails compilation`() {
+        val outcome = compile(
+            candidateSource(
+                declarations = layout(
+                    target = "ReservedConfiguration",
+                    id = "org.quicklauncher.samples/reserved-configuration",
+                    config = "unused",
+                    configTypeId = "org.quicklauncher.core/safe-layout",
+                ),
+            ),
+        )
+
+        assertFailure(
+            outcome,
+            "registry.reserved-safe-layout-identity",
+            "ReservedConfiguration",
+            "configuration type ID 'org.quicklauncher.core/safe-layout'",
+        )
     }
 
     @Test
@@ -583,17 +768,164 @@ class ContributionProcessorCompileTest {
     }
 
     private fun compile(vararg sources: SourceFile): CompilationOutcome {
+        return compileWithOptions(emptyMap(), *sources)
+    }
+
+    private fun compileWithOptions(
+        processorOptions: Map<String, String>,
+        vararg sources: SourceFile,
+    ): CompilationOutcome {
+        return compileWithClasspaths(emptyList(), processorOptions, *sources)
+    }
+
+    private fun compileWithClasspaths(
+        additionalClasspaths: List<java.io.File>,
+        processorOptions: Map<String, String> = emptyMap(),
+        vararg sources: SourceFile,
+    ): CompilationOutcome {
         val messages = ByteArrayOutputStream()
         val compilation = KotlinCompilation().apply {
             this.sources = sources.toList()
             inheritClassPath = true
+            classpaths = additionalClasspaths
             messageOutputStream = messages
             configureKsp {
                 symbolProcessorProviders += ContributionRegistryProcessorProvider()
+                this.processorOptions.putAll(processorOptions)
                 withCompilation = true
             }
         }
         return CompilationOutcome(compilation.compile(), messages.toString())
+    }
+
+    private fun compiledFragmentSource(): SourceFile = SourceFile.kotlin(
+        "CompiledFragment.kt",
+        """
+        package compiledfragment
+
+        import org.quicklauncher.contracts.contribution.*
+        import org.quicklauncher.contracts.domain.*
+        import org.quicklauncher.registry.annotations.*
+
+        @ContributionRegistryFragmentManifest(
+            fragmentId = "org.quicklauncher.fragment/compiled",
+            entries = [
+                ContributionRegistryFragmentEntry(
+                    index = 0,
+                    contributionId = "org.quicklauncher.samples/compiled",
+                    configTypeId = "org.quicklauncher.samples/compiled-config",
+                    categoryTypeId = "org.quicklauncher.contribution/layout",
+                ),
+            ],
+        )
+        object CompiledFragment : ContributionRegistry {
+            override val categoryIds = emptySet<ContributionTypeId>()
+            override val entries = emptyList<RegisteredContribution<*>>()
+        }
+        """.trimIndent(),
+    )
+
+    private fun aggregationSource(
+        reverseFragments: Boolean = false,
+        duplicateContributionId: Boolean = false,
+        duplicateConfigTypeId: Boolean = false,
+        capabilityCycle: Boolean = false,
+        blockCycle: Boolean = false,
+        incompatibleSlot: Boolean = false,
+        unsupportedMajor: Boolean = false,
+    ): SourceFile {
+        val fragments = if (reverseFragments) "LayoutFragment::class, BlockFragment::class" else
+            "BlockFragment::class, LayoutFragment::class"
+        val blockId = if (duplicateContributionId) "org.quicklauncher.samples/layout-a" else
+            "org.quicklauncher.samples/block-a"
+        val blockConfig = if (duplicateConfigTypeId) "org.quicklauncher.samples/layout-a-config" else
+            "org.quicklauncher.samples/block-a-config"
+        val layoutProvided = if (capabilityCycle) "[\"org.quicklauncher.capability/first\"]" else "[]"
+        val layoutRequired = if (capabilityCycle) "[\"org.quicklauncher.capability/second\"]" else "[]"
+        val blockProvided = if (capabilityCycle) "[\"org.quicklauncher.capability/second\"]" else "[]"
+        val blockRequired = if (capabilityCycle) "[\"org.quicklauncher.capability/first\"]" else "[]"
+        val layoutChildren = if (blockCycle) {
+            "[ContributionRegistryFragmentSlot(type = \"org.quicklauncher.slot/content\", " +
+                "acceptedBlocks = [\"org.quicklauncher.samples/block-a\"])]"
+        } else "[]"
+        val blockChildren = if (blockCycle) {
+            "[ContributionRegistryFragmentSlot(type = \"org.quicklauncher.slot/content\", " +
+                "acceptedBlocks = [\"org.quicklauncher.samples/layout-a\"])]"
+        } else "[]"
+        val layoutCategory = if (blockCycle) "org.quicklauncher.contribution/block" else
+            "org.quicklauncher.contribution/layout"
+        val layoutCompatible = if (blockCycle) "[\"org.quicklauncher.slot/content\"]" else "[]"
+        val blockCompatible = if (incompatibleSlot) "[\"org.quicklauncher.slot/other\"]" else
+            "[\"org.quicklauncher.slot/content\"]"
+        val blockMajor = if (unsupportedMajor) 2 else 1
+        val layoutSlots = if (incompatibleSlot) {
+            "[ContributionRegistryFragmentSlot(type = \"org.quicklauncher.slot/content\", " +
+                "acceptedBlocks = [\"org.quicklauncher.samples/block-a\"])]"
+        } else layoutChildren
+        return SourceFile.kotlin(
+            "Aggregation.kt",
+            """
+            package compiletest
+
+            import org.quicklauncher.contracts.contribution.*
+            import org.quicklauncher.contracts.domain.*
+            import org.quicklauncher.registry.annotations.*
+
+            @ContributionRegistryFragmentManifest(
+                fragmentId = "org.quicklauncher.fragment/layout",
+                entries = [
+                    ContributionRegistryFragmentEntry(
+                        index = 1,
+                        contributionId = "org.quicklauncher.samples/layout-z",
+                        configTypeId = "org.quicklauncher.samples/layout-z-config",
+                        categoryTypeId = "org.quicklauncher.contribution/layout",
+                    ),
+                    ContributionRegistryFragmentEntry(
+                        index = 0,
+                        contributionId = "org.quicklauncher.samples/layout-a",
+                        configTypeId = "org.quicklauncher.samples/layout-a-config",
+                        categoryTypeId = "$layoutCategory",
+                        providedCapabilities = $layoutProvided,
+                        requiredCapabilities = $layoutRequired,
+                        compatibleSlotTypes = $layoutCompatible,
+                        childSlots = $layoutSlots,
+                    ),
+                ],
+            )
+            object LayoutFragment : ContributionRegistry {
+                override val categoryIds = emptySet<ContributionTypeId>()
+                override val entries = emptyList<RegisteredContribution<*>>()
+            }
+
+            @ContributionRegistryFragmentManifest(
+                fragmentId = "org.quicklauncher.fragment/block",
+                entries = [
+                    ContributionRegistryFragmentEntry(
+                        index = 0,
+                        contributionId = "$blockId",
+                        configTypeId = "$blockConfig",
+                        categoryTypeId = "org.quicklauncher.contribution/block",
+                        contractMajor = $blockMajor,
+                        providedCapabilities = $blockProvided,
+                        requiredCapabilities = $blockRequired,
+                        compatibleSlotTypes = $blockCompatible,
+                        childSlots = $blockChildren,
+                    ),
+                ],
+            )
+            object BlockFragment : ContributionRegistry {
+                override val categoryIds = emptySet<ContributionTypeId>()
+                override val entries = emptyList<RegisteredContribution<*>>()
+            }
+
+            @AggregateContributionRegistry(
+                fragments = [$fragments],
+                packageName = "compiletest.generated",
+                registryName = "ApplicationContributionRegistry",
+            )
+            object AggregateApplicationRegistry
+            """.trimIndent(),
+        )
     }
 
     private fun assertFailure(
@@ -1104,6 +1436,10 @@ class ContributionProcessorCompileTest {
     ) {
         fun generatedRegistry(): String = result.sourcesGeneratedBySymbolProcessor
             .single { it.name == "GeneratedContributionRegistry.kt" }
+            .readText()
+
+        fun generated(name: String): String = result.sourcesGeneratedBySymbolProcessor
+            .single { it.name == name }
             .readText()
     }
 }

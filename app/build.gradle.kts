@@ -15,6 +15,7 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     flavorDimensions += "channel"
@@ -51,14 +52,34 @@ android {
 }
 
 dependencies {
+    implementation(project(":contracts:domain"))
+    implementation(project(":contracts:contribution"))
+    implementation(project(":host:data"))
+    implementation(project(":host:editor"))
+    implementation(project(":host:platform"))
+    implementation(project(":host:runtime"))
+    implementation(project(":host:settings"))
+    implementation(project(":registry:production"))
     implementation(libs.androidx.activity)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.runtime)
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.kotlinx.coroutines.core)
 
     testImplementation(libs.junit)
+
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.monitor)
+    androidTestImplementation(libs.androidx.test.uiautomator)
+    androidTestImplementation(libs.junit)
+    androidTestImplementation(project(":contracts:contribution"))
+    androidTestImplementation("org.jspecify:jspecify:1.0.0")
+    androidTestRuntimeOnly(libs.androidx.test.runner)
 }
 
 licensee {
     allow("Apache-2.0")
+    allow("BSD-3-Clause")
 }

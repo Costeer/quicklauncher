@@ -15,6 +15,10 @@ class ContributionIdentityTest {
         assertEquals(encoded, ConfigTypeId.parse(encoded).value)
         assertEquals(encoded, ModuleInstanceId.parse(encoded).value)
         assertEquals(encoded, ContributionTypeId.parse(encoded).value)
+        assertEquals(encoded, ConfigurationDocumentId.parse(encoded).value)
+        assertEquals(encoded, PlacementId.parse(encoded).value)
+        assertEquals(encoded, ThemeProfileId.parse(encoded).value)
+        assertEquals(encoded, CrashMarkerId.parse(encoded).value)
     }
 
     @Test
@@ -60,6 +64,23 @@ class ContributionIdentityTest {
         listOf("", "Result", "result item", "result/item", ".result").forEach { value ->
             assertThrows("Expected '$value' to be rejected", IllegalArgumentException::class.java) {
                 StableKey.parse(value)
+            }
+        }
+    }
+
+    @Test
+    fun `shortcut IDs preserve nonblank platform identifiers`() {
+        val encoded = "published:compose/recent items"
+
+        assertEquals(encoded, ShortcutId.parse(encoded).value)
+        assertEquals(encoded, ShortcutId.parse(encoded).toString())
+    }
+
+    @Test
+    fun `shortcut IDs reject empty and whitespace-only identifiers`() {
+        listOf("", " ", "\t\n").forEach { value ->
+            assertThrows("Expected '$value' to be rejected", IllegalArgumentException::class.java) {
+                ShortcutId.parse(value)
             }
         }
     }

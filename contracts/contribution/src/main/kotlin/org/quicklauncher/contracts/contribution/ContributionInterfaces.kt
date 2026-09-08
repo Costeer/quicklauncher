@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.Flow
 import org.quicklauncher.contracts.domain.ArgbColor
 import org.quicklauncher.contracts.domain.CapabilityId
 import org.quicklauncher.contracts.domain.CommandInvocationId
+import org.quicklauncher.contracts.domain.ConfigurationDocumentId
 import org.quicklauncher.contracts.domain.ContentItemId
 import org.quicklauncher.contracts.domain.ContributionId
 import org.quicklauncher.contracts.domain.DestinationId
@@ -15,6 +16,7 @@ import org.quicklauncher.contracts.domain.ModuleInstanceId
 import org.quicklauncher.contracts.domain.ProfilePackageIdentity
 import org.quicklauncher.contracts.domain.SearchActionId
 import org.quicklauncher.contracts.domain.SearchResultId
+import org.quicklauncher.contracts.domain.SchemaVersion
 import org.quicklauncher.contracts.domain.StableKey
 import org.quicklauncher.contracts.ui.BlockRenderInput
 import org.quicklauncher.contracts.ui.LayoutRenderInput
@@ -160,39 +162,232 @@ interface LauncherCommandContribution<C : Any> : Contribution {
 data class ModuleDraft(
     val instanceId: ModuleInstanceId,
     val contributionId: ContributionId,
+    val configurationDocumentId: ConfigurationDocumentId,
     val configuration: ConfigurationDocument,
 )
+
+data class ModuleDraftIdentity(
+    val instanceId: ModuleInstanceId,
+    val configurationDocumentId: ConfigurationDocumentId,
+)
+
+/** Opaque layout-owned placement payload preserved without normalization. */
+@JvmInline
+value class EncodedPlacementData private constructor(val value: String) {
+    companion object {
+        fun of(value: String): EncodedPlacementData = EncodedPlacementData(value)
+    }
+}
+
+data class PlacementData(
+    val schemaVersion: SchemaVersion,
+    val encoded: EncodedPlacementData,
+)
+
+data class PlacementDraft(
+    val parentInstanceId: ModuleInstanceId,
+    val parentSlotId: StableKey,
+    val childInstanceId: ModuleInstanceId,
+    val index: Int,
+    val data: PlacementData,
+) {
+    init {
+        require(index >= 0) { "Placement index must not be negative" }
+    }
+}
 
 class DestinationDraft(
     val id: DestinationId,
     val name: DisplayText,
     val layout: ModuleDraft,
     blocks: Collection<ModuleDraft>,
+    placements: Collection<PlacementDraft>,
 ) {
     val blocks: List<ModuleDraft> = immutableContractList(blocks)
+    val placements: List<PlacementDraft> = immutableContractList(placements)
+
+    init {
+        val modules = listOf(layout) + this.blocks
+        val moduleIds = modules.map { it.instanceId }
+        require(moduleIds.size == moduleIds.toSet().size) {
+            "Module instance IDs must be unique across the layout root and blocks"
+        }
+        val knownIds = moduleIds.toSet()
+        val blockIds = this.blocks.mapTo(LinkedHashSet()) { it.instanceId }
+        this.placements.forEach { placement ->
+            require(placement.parentInstanceId in knownIds) {
+                "Placement parent must be a known draft instance; received " +
+                    "'${placement.parentInstanceId}'"
+            }
+            require(placement.childInstanceId != layout.instanceId) {
+                "Layout root must not be the child of a placement"
+            }
+            require(placement.childInstanceId in blockIds) {
+                "Placement child must be a declared block instance; received " +
+                    "'${placement.childInstanceId}'"
+            }
+        }
+        val duplicateChild = this.placements.groupingBy { it.childInstanceId }
+            .eachCount()
+            .entries
+            .firstOrNull { it.value != 1 }
+            ?.key
+        require(duplicateChild == null) {
+            "Each block instance must be the child of exactly one placement; duplicate '$duplicateChild'"
+        }
+        val placedChildren = this.placements.mapTo(LinkedHashSet()) { it.childInstanceId }
+        val missingChild = blockIds.firstOrNull { it !in placedChildren }
+        require(missingChild == null) {
+            "Every declared block must be placed; missing '$missingChild'"
+        }
+
+        this.placements.groupBy { it.parentInstanceId to it.parentSlotId }.forEach { (slot, siblings) ->
+            val actual = siblings.map { it.index }.sorted()
+            val expected = siblings.indices.toList()
+            require(actual == expected) {
+                "Placement indexes must be contiguous from zero within parent '${slot.first}' " +
+                    "slot '${slot.second}'; received $actual"
+            }
+        }
+
+        val childrenByParent = this.placements.groupBy(
+            keySelector = { it.parentInstanceId },
+            valueTransform = { it.childInstanceId },
+        )
+        val visiting = HashSet<ModuleInstanceId>()
+        val visited = HashSet<ModuleInstanceId>()
+        fun visit(instanceId: ModuleInstanceId): Boolean {
+            if (instanceId in visiting) return false
+            if (!visited.add(instanceId)) return true
+            visiting += instanceId
+            val acyclic = childrenByParent[instanceId].orEmpty().all(::visit)
+            visiting -= instanceId
+            return acyclic
+        }
+        require(knownIds.all(::visit)) { "Placement graph must be acyclic" }
+
+        val reachable = LinkedHashSet<ModuleInstanceId>()
+        fun collectReachable(instanceId: ModuleInstanceId) {
+            if (!reachable.add(instanceId)) return
+            childrenByParent[instanceId].orEmpty().forEach(::collectReachable)
+        }
+        collectReachable(layout.instanceId)
+        val unreachable = blockIds.filterNot { it in reachable }
+        require(unreachable.isEmpty()) {
+            "Every declared block must be reachable from the layout root; unreachable $unreachable"
+        }
+    }
 
     override fun equals(other: Any?): Boolean = other is DestinationDraft &&
-        id == other.id && name == other.name && layout == other.layout && blocks == other.blocks
+        id == other.id && name == other.name && layout == other.layout && blocks == other.blocks &&
+        placements == other.placements
 
-    override fun hashCode(): Int = 31 * (31 * (31 * id.hashCode() + name.hashCode()) + layout.hashCode()) +
-        blocks.hashCode()
+    override fun hashCode(): Int =
+        31 * (31 * (31 * (31 * id.hashCode() + name.hashCode()) + layout.hashCode()) +
+            blocks.hashCode()) + placements.hashCode()
 
     override fun toString(): String =
-        "DestinationDraft(id=$id, name=$name, layout=$layout, blocks=$blocks)"
+        "DestinationDraft(id=$id, name=$name, layout=$layout, blocks=$blocks, placements=$placements)"
 }
 
-class TemplateInput<C : Any>(
+data class TemplateCoordinate(val x: Int, val y: Int) {
+    fun isCardinalNeighborOf(other: TemplateCoordinate): Boolean =
+        kotlin.math.abs(x.toLong() - other.x.toLong()) +
+            kotlin.math.abs(y.toLong() - other.y.toLong()) == 1L
+}
+
+data class PositionedDestinationDraft(
+    val coordinate: TemplateCoordinate,
+    val draft: DestinationDraft,
+    val isStart: Boolean,
+)
+
+class TemplatePlan(destinations: Collection<PositionedDestinationDraft>) {
+    val destinations: List<PositionedDestinationDraft> = immutableContractList(destinations)
+    val startDestination: PositionedDestinationDraft
+
+    init {
+        require(this.destinations.isNotEmpty()) { "Template plan must contain at least one destination" }
+        require(this.destinations.map { it.draft.id }.toSet().size == this.destinations.size) {
+            "Template plan destination IDs must be unique"
+        }
+        require(this.destinations.map { it.coordinate }.toSet().size == this.destinations.size) {
+            "Template plan coordinates must be unique"
+        }
+        val modules = this.destinations.flatMap { listOf(it.draft.layout) + it.draft.blocks }
+        require(modules.map { it.instanceId }.toSet().size == modules.size) {
+            "Template plan module instance IDs must be unique across destinations"
+        }
+        require(modules.map { it.configurationDocumentId }.toSet().size == modules.size) {
+            "Template plan configuration document IDs must be unique across destinations"
+        }
+        val starts = this.destinations.filter { it.isStart }
+        require(starts.size == 1) { "Template plan must contain exactly one start destination" }
+        startDestination = starts.single()
+
+        val reachable = LinkedHashSet<TemplateCoordinate>()
+        val pending = ArrayDeque<TemplateCoordinate>()
+        pending += startDestination.coordinate
+        while (pending.isNotEmpty()) {
+            val coordinate = pending.removeFirst()
+            if (!reachable.add(coordinate)) continue
+            this.destinations.asSequence()
+                .map { it.coordinate }
+                .filter(coordinate::isCardinalNeighborOf)
+                .filterNot(reachable::contains)
+                .forEach(pending::addLast)
+        }
+        require(reachable.size == this.destinations.size) {
+            "Template plan destinations must form one cardinally connected map"
+        }
+    }
+
+    override fun equals(other: Any?): Boolean =
+        other is TemplatePlan && destinations == other.destinations
+
+    override fun hashCode(): Int = destinations.hashCode()
+
+    override fun toString(): String = "TemplatePlan(destinations=$destinations)"
+}
+
+data class TemplateDestinationInput(
     val destinationId: DestinationId,
     val name: DisplayText,
-    availableInstanceIds: Collection<ModuleInstanceId>,
+)
+
+class TemplateInput<C : Any>(
+    destinations: Collection<TemplateDestinationInput>,
+    availableModuleIdentities: Collection<ModuleDraftIdentity>,
     val configuration: C,
     val cancellation: CancellationSignal,
 ) {
-    val availableInstanceIds: List<ModuleInstanceId> = immutableContractList(availableInstanceIds)
+    val destinations: List<TemplateDestinationInput> = immutableContractList(destinations)
+    val availableModuleIdentities: List<ModuleDraftIdentity> =
+        immutableContractList(availableModuleIdentities)
+
+    init {
+        require(this.destinations.isNotEmpty()) {
+            "Template input must supply at least one destination identity"
+        }
+        require(this.destinations.map { it.destinationId }.toSet().size == this.destinations.size) {
+            "Template input destination IDs must be unique"
+        }
+        require(this.availableModuleIdentities.isNotEmpty()) {
+            "Template input must supply at least one module identity"
+        }
+        require(
+            this.availableModuleIdentities.map { it.instanceId }.toSet().size ==
+                this.availableModuleIdentities.size,
+        ) { "Template input module instance IDs must be unique" }
+        require(
+            this.availableModuleIdentities.map { it.configurationDocumentId }.toSet().size ==
+                this.availableModuleIdentities.size,
+        ) { "Template input configuration document IDs must be unique" }
+    }
 }
 
 sealed interface TemplateResult {
-    data class Created(val draft: DestinationDraft) : TemplateResult
+    data class Created(val plan: TemplatePlan) : TemplateResult
     data class Invalid(val code: StableKey, val message: DisplayText) : TemplateResult
 }
 

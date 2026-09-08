@@ -1,0 +1,873 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 4,
+    "identityHash": "f05ba51c105cf972937e095957ff2027",
+    "entities": [
+      {
+        "tableName": "destinations",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `x` INTEGER NOT NULL, `y` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "x",
+            "columnName": "x",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "y",
+            "columnName": "y",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_destinations_x_y",
+            "unique": true,
+            "columnNames": [
+              "x",
+              "y"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_destinations_x_y` ON `${TABLE_NAME}` (`x`, `y`)"
+          }
+        ]
+      },
+      {
+        "tableName": "destination_layouts",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`destinationId` TEXT NOT NULL, `layoutContributionId` TEXT NOT NULL, `rootInstanceId` TEXT NOT NULL, `selected` INTEGER NOT NULL, PRIMARY KEY(`destinationId`, `layoutContributionId`), FOREIGN KEY(`destinationId`) REFERENCES `destinations`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`rootInstanceId`) REFERENCES `module_instances`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "destinationId",
+            "columnName": "destinationId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "layoutContributionId",
+            "columnName": "layoutContributionId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rootInstanceId",
+            "columnName": "rootInstanceId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "selected",
+            "columnName": "selected",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "destinationId",
+            "layoutContributionId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_destination_layouts_rootInstanceId",
+            "unique": true,
+            "columnNames": [
+              "rootInstanceId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_destination_layouts_rootInstanceId` ON `${TABLE_NAME}` (`rootInstanceId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "destinations",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "destinationId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "module_instances",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "rootInstanceId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "module_instances",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `contributionId` TEXT NOT NULL, `configurationDocumentId` TEXT NOT NULL, `lifecycle` TEXT NOT NULL, `quarantineReasonCode` TEXT, `quarantineReasonMessage` TEXT, `quarantineOrigin` TEXT NOT NULL DEFAULT 'OTHER', PRIMARY KEY(`id`), FOREIGN KEY(`configurationDocumentId`) REFERENCES `configuration_documents`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "contributionId",
+            "columnName": "contributionId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "configurationDocumentId",
+            "columnName": "configurationDocumentId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lifecycle",
+            "columnName": "lifecycle",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "quarantineReasonCode",
+            "columnName": "quarantineReasonCode",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "quarantineReasonMessage",
+            "columnName": "quarantineReasonMessage",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "quarantineOrigin",
+            "columnName": "quarantineOrigin",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'OTHER'"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_module_instances_configurationDocumentId",
+            "unique": false,
+            "columnNames": [
+              "configurationDocumentId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_module_instances_configurationDocumentId` ON `${TABLE_NAME}` (`configurationDocumentId`)"
+          },
+          {
+            "name": "index_module_instances_contributionId",
+            "unique": false,
+            "columnNames": [
+              "contributionId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_module_instances_contributionId` ON `${TABLE_NAME}` (`contributionId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "configuration_documents",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "configurationDocumentId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "configuration_documents",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `configType` TEXT NOT NULL, `schemaVersion` INTEGER NOT NULL, `encoded` TEXT NOT NULL, `lastMigrationErrorCode` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "configType",
+            "columnName": "configType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "schemaVersion",
+            "columnName": "schemaVersion",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "encoded",
+            "columnName": "encoded",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastMigrationErrorCode",
+            "columnName": "lastMigrationErrorCode",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_configuration_documents_configType_schemaVersion",
+            "unique": false,
+            "columnNames": [
+              "configType",
+              "schemaVersion"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_configuration_documents_configType_schemaVersion` ON `${TABLE_NAME}` (`configType`, `schemaVersion`)"
+          }
+        ]
+      },
+      {
+        "tableName": "placements",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `treeRootInstanceId` TEXT NOT NULL, `parentInstanceId` TEXT NOT NULL, `slotId` TEXT NOT NULL, `childInstanceId` TEXT NOT NULL, `position` INTEGER NOT NULL, `payloadSchemaVersion` INTEGER NOT NULL, `encodedPlacement` TEXT NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`treeRootInstanceId`) REFERENCES `module_instances`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION , FOREIGN KEY(`parentInstanceId`) REFERENCES `module_instances`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION , FOREIGN KEY(`childInstanceId`) REFERENCES `module_instances`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "treeRootInstanceId",
+            "columnName": "treeRootInstanceId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "parentInstanceId",
+            "columnName": "parentInstanceId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "slotId",
+            "columnName": "slotId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "childInstanceId",
+            "columnName": "childInstanceId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "position",
+            "columnName": "position",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "payloadSchemaVersion",
+            "columnName": "payloadSchemaVersion",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "encodedPlacement",
+            "columnName": "encodedPlacement",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_placements_treeRootInstanceId",
+            "unique": false,
+            "columnNames": [
+              "treeRootInstanceId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_placements_treeRootInstanceId` ON `${TABLE_NAME}` (`treeRootInstanceId`)"
+          },
+          {
+            "name": "index_placements_parentInstanceId_slotId_position",
+            "unique": true,
+            "columnNames": [
+              "parentInstanceId",
+              "slotId",
+              "position"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_placements_parentInstanceId_slotId_position` ON `${TABLE_NAME}` (`parentInstanceId`, `slotId`, `position`)"
+          },
+          {
+            "name": "index_placements_childInstanceId",
+            "unique": true,
+            "columnNames": [
+              "childInstanceId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_placements_childInstanceId` ON `${TABLE_NAME}` (`childInstanceId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "module_instances",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "treeRootInstanceId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "module_instances",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "parentInstanceId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "module_instances",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "childInstanceId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "content_items",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `kind` TEXT NOT NULL, `profileSerial` INTEGER, `packageName` TEXT, `shortcutId` TEXT, `encodedSemanticData` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "profileSerial",
+            "columnName": "profileSerial",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "packageName",
+            "columnName": "packageName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "shortcutId",
+            "columnName": "shortcutId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "encodedSemanticData",
+            "columnName": "encodedSemanticData",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_content_items_kind",
+            "unique": false,
+            "columnNames": [
+              "kind"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_content_items_kind` ON `${TABLE_NAME}` (`kind`)"
+          }
+        ]
+      },
+      {
+        "tableName": "folder_members",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`folderContentItemId` TEXT NOT NULL, `memberContentItemId` TEXT NOT NULL, `position` INTEGER NOT NULL, PRIMARY KEY(`folderContentItemId`, `position`), FOREIGN KEY(`folderContentItemId`) REFERENCES `content_items`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`memberContentItemId`) REFERENCES `content_items`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "folderContentItemId",
+            "columnName": "folderContentItemId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "memberContentItemId",
+            "columnName": "memberContentItemId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "position",
+            "columnName": "position",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "folderContentItemId",
+            "position"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_folder_members_memberContentItemId",
+            "unique": false,
+            "columnNames": [
+              "memberContentItemId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_folder_members_memberContentItemId` ON `${TABLE_NAME}` (`memberContentItemId`)"
+          },
+          {
+            "name": "index_folder_members_folderContentItemId_memberContentItemId",
+            "unique": true,
+            "columnNames": [
+              "folderContentItemId",
+              "memberContentItemId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_folder_members_folderContentItemId_memberContentItemId` ON `${TABLE_NAME}` (`folderContentItemId`, `memberContentItemId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "content_items",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "folderContentItemId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "content_items",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "memberContentItemId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "app_overrides",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`profileSerial` INTEGER NOT NULL, `packageName` TEXT NOT NULL, `activityName` TEXT NOT NULL, `encodedOverride` TEXT NOT NULL, PRIMARY KEY(`profileSerial`, `packageName`, `activityName`))",
+        "fields": [
+          {
+            "fieldPath": "profileSerial",
+            "columnName": "profileSerial",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "packageName",
+            "columnName": "packageName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "activityName",
+            "columnName": "activityName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "encodedOverride",
+            "columnName": "encodedOverride",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "profileSerial",
+            "packageName",
+            "activityName"
+          ]
+        }
+      },
+      {
+        "tableName": "widget_placements",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`moduleInstanceId` TEXT NOT NULL, `profileSerial` INTEGER NOT NULL, `providerPackageName` TEXT NOT NULL, `providerClassName` TEXT NOT NULL, `appWidgetId` INTEGER, `bindingState` TEXT NOT NULL, `encodedOptions` TEXT NOT NULL, PRIMARY KEY(`moduleInstanceId`), FOREIGN KEY(`moduleInstanceId`) REFERENCES `module_instances`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "moduleInstanceId",
+            "columnName": "moduleInstanceId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "profileSerial",
+            "columnName": "profileSerial",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "providerPackageName",
+            "columnName": "providerPackageName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "providerClassName",
+            "columnName": "providerClassName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "appWidgetId",
+            "columnName": "appWidgetId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "bindingState",
+            "columnName": "bindingState",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "encodedOptions",
+            "columnName": "encodedOptions",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "moduleInstanceId"
+          ]
+        },
+        "foreignKeys": [
+          {
+            "table": "module_instances",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "moduleInstanceId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "theme_profiles",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `schemaVersion` INTEGER NOT NULL, `encodedTheme` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "schemaVersion",
+            "columnName": "schemaVersion",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "encodedTheme",
+            "columnName": "encodedTheme",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "destination_backgrounds",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`destinationId` TEXT NOT NULL, `themeProfileId` TEXT NOT NULL, `schemaVersion` INTEGER NOT NULL, `encodedBackground` TEXT NOT NULL, PRIMARY KEY(`destinationId`), FOREIGN KEY(`destinationId`) REFERENCES `destinations`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`themeProfileId`) REFERENCES `theme_profiles`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "destinationId",
+            "columnName": "destinationId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "themeProfileId",
+            "columnName": "themeProfileId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "schemaVersion",
+            "columnName": "schemaVersion",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "encodedBackground",
+            "columnName": "encodedBackground",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "destinationId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_destination_backgrounds_themeProfileId",
+            "unique": false,
+            "columnNames": [
+              "themeProfileId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_destination_backgrounds_themeProfileId` ON `${TABLE_NAME}` (`themeProfileId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "destinations",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "destinationId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "theme_profiles",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "themeProfileId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "crash_markers",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `moduleInstanceId` TEXT NOT NULL, `appVersion` TEXT NOT NULL, `startupAttempt` INTEGER NOT NULL, `timestampEpochMillis` INTEGER NOT NULL, `outcome` TEXT, `firstObservedAtEpochMillis` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`moduleInstanceId`) REFERENCES `module_instances`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "moduleInstanceId",
+            "columnName": "moduleInstanceId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "appVersion",
+            "columnName": "appVersion",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startupAttempt",
+            "columnName": "startupAttempt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestampEpochMillis",
+            "columnName": "timestampEpochMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "outcome",
+            "columnName": "outcome",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "firstObservedAtEpochMillis",
+            "columnName": "firstObservedAtEpochMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_crash_markers_moduleInstanceId",
+            "unique": false,
+            "columnNames": [
+              "moduleInstanceId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_crash_markers_moduleInstanceId` ON `${TABLE_NAME}` (`moduleInstanceId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "module_instances",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "moduleInstanceId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "store_metadata",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`singletonKey` INTEGER NOT NULL, `startDestinationId` TEXT NOT NULL, `revision` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`singletonKey`), FOREIGN KEY(`startDestinationId`) REFERENCES `destinations`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "singletonKey",
+            "columnName": "singletonKey",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startDestinationId",
+            "columnName": "startDestinationId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "revision",
+            "columnName": "revision",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "singletonKey"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_store_metadata_startDestinationId",
+            "unique": true,
+            "columnNames": [
+              "startDestinationId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_store_metadata_startDestinationId` ON `${TABLE_NAME}` (`startDestinationId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "destinations",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "startDestinationId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'f05ba51c105cf972937e095957ff2027')"
+    ]
+  }
+}

@@ -39,6 +39,17 @@ class ContributionRegistryProcessor(
 
         val declarations = mutableListOf<KSClassDeclaration>()
         val registrations = mutableListOf<RawRegistration>()
+        val aggregations = resolver.getSymbolsWithAnnotation(AGGREGATE_REGISTRY)
+            .mapNotNull { symbol ->
+                val declaration = symbol as? KSClassDeclaration
+                if (declaration == null) {
+                    logger.error("[registry.aggregation-target] Registry aggregation requires a class or object", symbol)
+                    null
+                } else {
+                    declaration.findAnnotation(AGGREGATE_REGISTRY)?.let { declaration to it }
+                }
+            }
+            .toList()
         annotationKinds.forEach { (annotationName, kind) ->
             resolver.getSymbolsWithAnnotation(annotationName).forEach { symbol ->
                 val declaration = symbol as? KSClassDeclaration
@@ -64,12 +75,20 @@ class ContributionRegistryProcessor(
 
         val categories = CategoryCatalog.firstRelease()
 
-        if (declarations.isEmpty()) {
+        if (declarations.isEmpty() && aggregations.isEmpty()) {
             finished = true
             return emptyList()
         }
 
-        when (val validation = RegistryValidator.validate(categories, registrations)) {
+        val emitsFragment = OPTION_FRAGMENT_PACKAGE in options || OPTION_FRAGMENT_NAME in options ||
+            OPTION_FRAGMENT_ID in options
+        when (
+            val validation = RegistryValidator.validate(
+                categories,
+                registrations,
+                allowExternalReferences = emitsFragment,
+            )
+        ) {
             is RegistryValidationResult.Invalid -> {
                 val nodes = declarations.associateBy {
                     it.qualifiedName?.asString() ?: it.simpleName.asString()
@@ -81,7 +100,12 @@ class ContributionRegistryProcessor(
                     )
                 }
             }
-            is RegistryValidationResult.Valid -> generate(validation, declarations)
+            is RegistryValidationResult.Valid -> if (declarations.isNotEmpty()) {
+                generate(validation, declarations)
+            }
+        }
+        aggregations.forEach { (declaration, annotation) ->
+            generateAggregation(declaration, annotation)
         }
         finished = true
         return emptyList()
@@ -91,8 +115,12 @@ class ContributionRegistryProcessor(
         validation: RegistryValidationResult.Valid,
         declarations: List<KSClassDeclaration>,
     ) {
-        val packageName = options[OPTION_PACKAGE] ?: "org.quicklauncher.generated"
-        val objectName = options[OPTION_NAME] ?: "GeneratedContributionRegistry"
+        val packageName = options[OPTION_FRAGMENT_PACKAGE] ?: options[OPTION_PACKAGE]
+            ?: "org.quicklauncher.generated"
+        val objectName = options[OPTION_FRAGMENT_NAME] ?: options[OPTION_NAME]
+            ?: "GeneratedContributionRegistry"
+        val fragmentId = options[OPTION_FRAGMENT_ID]
+            ?: "$packageName/${objectName.toKebabCase()}"
         val sourceFiles = linkedSetOf<KSFile>()
         declarations.mapNotNullTo(sourceFiles) { it.containingFile }
         val output = codeGenerator.createNewFile(
@@ -102,7 +130,82 @@ class ContributionRegistryProcessor(
             extensionName = "kt",
         )
         output.bufferedWriter().use { writer ->
-            writer.write(RegistrySourceGenerator.generate(validation, packageName, objectName))
+            writer.write(RegistrySourceGenerator.generate(validation, packageName, objectName, fragmentId))
+        }
+    }
+
+    private fun generateAggregation(
+        declaration: KSClassDeclaration,
+        annotation: KSAnnotation,
+    ) {
+        val fragments = annotation.typeDeclarations("fragments").mapNotNull { fragment ->
+            if (!fragment.implements(CONTRIBUTION_REGISTRY)) {
+                logger.error(
+                    "[registry.fragment-contract] ${declaration.qualifiedName?.asString()}: Fragment " +
+                        "'${fragment.qualifiedName?.asString()}' must implement ContributionRegistry",
+                    declaration,
+                )
+                return@mapNotNull null
+            }
+            val manifest = fragment.findAnnotation(FRAGMENT_MANIFEST)
+            if (manifest == null) {
+                logger.error(
+                    "[registry.missing-fragment-manifest] ${declaration.qualifiedName?.asString()}: " +
+                        "Fragment '${fragment.qualifiedName?.asString()}' has no generated manifest",
+                    declaration,
+                )
+                null
+            } else {
+                RawRegistryFragment(
+                    declarationName = fragment.qualifiedName?.asString() ?: fragment.simpleName.asString(),
+                    fragmentId = manifest.string("fragmentId"),
+                    entries = manifest.annotations("entries").map { entry ->
+                        RawRegistryFragmentEntry(
+                            index = entry.int("index"),
+                            contributionId = entry.string("contributionId"),
+                            configTypeId = entry.string("configTypeId"),
+                            categoryTypeId = entry.string("categoryTypeId"),
+                            contractMajor = entry.int("contractMajor"),
+                            providedCapabilities = entry.strings("providedCapabilities"),
+                            requiredCapabilities = entry.strings("requiredCapabilities"),
+                            compatibleSlotTypes = entry.strings("compatibleSlotTypes"),
+                            occupiedScrollAxes = entry.strings("occupiedScrollAxes"),
+                            childSlots = entry.annotations("childSlots").map { slot ->
+                                RawRegistryFragmentSlot(
+                                    type = slot.string("type"),
+                                    acceptedBlocks = slot.strings("acceptedBlocks"),
+                                    requiredCapabilities = slot.strings("requiredCapabilities"),
+                                    maximumChildren = slot.int("maximumChildren"),
+                                    allowedScrollAxes = slot.strings("allowedScrollAxes"),
+                                )
+                            },
+                            requiredContributions = entry.strings("requiredContributions"),
+                        )
+                    },
+                )
+            }
+        }
+        when (val validation = RegistryAggregationValidator.validate(CategoryCatalog.firstRelease(), fragments)) {
+            is AggregationValidationResult.Invalid -> validation.issues.forEach { issue ->
+                logger.error(
+                    "$issue ${declaration.qualifiedName?.asString()}: cross-fragment registry aggregation failed",
+                    declaration,
+                )
+            }
+            is AggregationValidationResult.Valid -> {
+                val packageName = annotation.string("packageName")
+                val registryName = annotation.string("registryName")
+                val sourceFiles = listOfNotNull(declaration.containingFile).toTypedArray()
+                val output = codeGenerator.createNewFile(
+                    dependencies = Dependencies(aggregating = true, *sourceFiles),
+                    packageName = packageName,
+                    fileName = registryName,
+                    extensionName = "kt",
+                )
+                output.bufferedWriter().use { writer ->
+                    writer.write(AggregatedRegistrySourceGenerator.generate(packageName, registryName, validation))
+                }
+            }
         }
     }
 
@@ -315,6 +418,11 @@ class ContributionRegistryProcessor(
     private fun KSAnnotation.annotations(name: String): List<KSAnnotation> =
         (argument(name) as? List<*>)?.map { it as KSAnnotation }.orEmpty()
 
+    private fun KSAnnotation.typeDeclarations(name: String): List<KSClassDeclaration> =
+        (argument(name) as? List<*>)
+            ?.mapNotNull { (it as? KSType)?.declaration as? KSClassDeclaration }
+            .orEmpty()
+
     private fun KSAnnotation.enumName(name: String): String = enumName(argument(name))
 
     private fun KSAnnotation.enumNames(name: String): List<String> =
@@ -336,6 +444,13 @@ class ContributionRegistryProcessor(
     private companion object {
         const val OPTION_PACKAGE = "quicklauncher.registry.package"
         const val OPTION_NAME = "quicklauncher.registry.name"
+        const val OPTION_FRAGMENT_PACKAGE = "quicklauncher.registry.fragment.package"
+        const val OPTION_FRAGMENT_NAME = "quicklauncher.registry.fragment.name"
+        const val OPTION_FRAGMENT_ID = "quicklauncher.registry.fragment.id"
+        const val AGGREGATE_REGISTRY =
+            "org.quicklauncher.registry.annotations.AggregateContributionRegistry"
+        const val FRAGMENT_MANIFEST =
+            "org.quicklauncher.registry.annotations.ContributionRegistryFragmentManifest"
         const val SETTINGS_SCHEMA = "org.quicklauncher.registry.annotations.SettingsSchemaSpec"
         const val CODEC_SPEC = "org.quicklauncher.registry.annotations.ConfigurationCodecSpec"
         const val CONTRACT_TEST_SPEC = "org.quicklauncher.registry.annotations.ContractTestSpec"
@@ -343,7 +458,11 @@ class ContributionRegistryProcessor(
             "org.quicklauncher.contracts.contribution.ConfigurationCodec"
         const val CONTRACT_TEST_DECLARATION =
             "org.quicklauncher.contracts.contribution.ContributionContractDeclaration"
+        const val CONTRIBUTION_REGISTRY =
+            "org.quicklauncher.contracts.contribution.ContributionRegistry"
 
         val annotationKinds = RegistrationKind.entries.associateBy { it.annotationType }
     }
 }
+
+private fun String.toKebabCase(): String = replace(Regex("([a-z0-9])([A-Z])"), "$1-$2").lowercase()

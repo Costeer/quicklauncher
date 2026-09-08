@@ -117,10 +117,30 @@ data class PlacementState(
     }
 }
 
+@JvmInline
+value class EncodedPlacement private constructor(val value: String) {
+    companion object {
+        fun of(value: String): EncodedPlacement = EncodedPlacement(value)
+    }
+}
+
+data class PlacementRenderData(
+    val schemaVersion: Int,
+    val encoded: EncodedPlacement,
+) {
+    init {
+        require(schemaVersion >= 1) { "Placement schema version must be positive" }
+    }
+}
+
 data class PlacedChild(
     val instanceId: ModuleInstanceId,
     val contributionId: ContributionId,
     val index: Int,
+    val placement: PlacementRenderData = PlacementRenderData(
+        schemaVersion = 1,
+        encoded = EncodedPlacement.of("{}"),
+    ),
 ) {
     init {
         require(index >= 0) { "Child placement index must not be negative" }
@@ -203,6 +223,20 @@ class PreparedHostContent(
 interface SlotRenderer {
     @Composable
     fun Render(slot: SlotRenderState, modifier: Modifier = Modifier)
+
+    /** Renders one child so the parent contribution keeps ownership of spatial arrangement. */
+    @Composable
+    fun RenderChild(
+        slot: SlotRenderState,
+        child: PlacedChild,
+        modifier: Modifier = Modifier,
+    ) {
+        require(child in slot.placements) { "Child '${child.instanceId}' is not present in slot '${slot.id}'" }
+        Render(
+            SlotRenderState(slot.id, slot.type, slot.status, listOf(child)),
+            modifier,
+        )
+    }
 }
 
 interface PreparedContentRenderer {

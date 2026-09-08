@@ -71,6 +71,41 @@ class RegistryValidatorTest {
         assertTrue(cycle.message.contains("second -> org.quicklauncher.capability/first"))
     }
 
+    @Test
+    fun `host owned safe layout identity cannot be registered as a contribution`() {
+        val registration = valid(
+            RegistrationKind.LAYOUT,
+            "org.quicklauncher.core/safe-layout",
+        )
+
+        val invalid = RegistryValidator.validate(CategoryCatalog.firstRelease(), listOf(registration))
+            as RegistryValidationResult.Invalid
+
+        val issue = invalid.issues.single { it.code == "registry.reserved-safe-layout-identity" }
+        assertEquals(registration.targetName, issue.targetName)
+        assertTrue(issue.message.contains("contribution ID 'org.quicklauncher.core/safe-layout'"))
+        assertTrue(issue.message.contains("reserved for the host-owned safe layout"))
+    }
+
+    @Test
+    fun `host owned safe layout identity cannot be registered as a configuration type`() {
+        val registration = valid(
+            RegistrationKind.LAYOUT,
+            "org.quicklauncher.samples/reserved-config",
+        ).copy(
+            configTypeId = "org.quicklauncher.core/safe-layout",
+            codecManifestConfigTypeId = "org.quicklauncher.core/safe-layout",
+        )
+
+        val invalid = RegistryValidator.validate(CategoryCatalog.firstRelease(), listOf(registration))
+            as RegistryValidationResult.Invalid
+
+        val issue = invalid.issues.single { it.code == "registry.reserved-safe-layout-identity" }
+        assertEquals(registration.targetName, issue.targetName)
+        assertTrue(issue.message.contains("configuration type ID 'org.quicklauncher.core/safe-layout'"))
+        assertTrue(issue.message.contains("reserved for the host-owned safe layout"))
+    }
+
     private fun valid(kind: RegistrationKind, id: String): RawRegistration = RawRegistration(
         targetName = "org.quicklauncher.samples.${id.substringAfter('/')}.Target",
         kind = kind,

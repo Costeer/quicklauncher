@@ -5,9 +5,11 @@ object RegistrySourceGenerator {
         registry: RegistryValidationResult.Valid,
         packageName: String = "org.quicklauncher.generated",
         objectName: String = "GeneratedContributionRegistry",
+        fragmentId: String = "$packageName/$objectName",
     ): String = buildString {
         appendLine("package $packageName")
         appendLine()
+        appendFragmentManifest(registry, fragmentId)
         appendLine("object $objectName : org.quicklauncher.contracts.contribution.ContributionRegistry {")
         appendLine("    override val categoryIds = org.quicklauncher.contracts.contribution.contributionTypeIdsOf(")
         appendLine("        listOf(")
@@ -26,6 +28,53 @@ object RegistrySourceGenerator {
         appendLine("        ),")
         appendLine("    )")
         appendLine("}")
+    }
+
+    private fun StringBuilder.appendFragmentManifest(
+        registry: RegistryValidationResult.Valid,
+        fragmentId: String,
+    ) {
+        appendLine("@org.quicklauncher.registry.annotations.ContributionRegistryFragmentManifest(")
+        appendLine("    fragmentId = ${fragmentId.quoted()},")
+        appendLine("    entries = [")
+        registry.registrations.forEachIndexed { index, registration ->
+            val raw = registration.raw
+            val block = raw.specific as? RawSpecificDescriptor.Block
+            val slots = when (val specific = raw.specific) {
+                is RawSpecificDescriptor.Layout -> specific.slots
+                is RawSpecificDescriptor.Block -> specific.childSlots
+                else -> emptyList()
+            }
+            appendLine("        org.quicklauncher.registry.annotations.ContributionRegistryFragmentEntry(")
+            appendLine("            index = $index,")
+            appendLine("            contributionId = ${raw.id.quoted()},")
+            appendLine("            configTypeId = ${raw.configTypeId.quoted()},")
+            appendLine("            categoryTypeId = ${raw.kind.persistedTypeId.quoted()},")
+            appendLine("            contractMajor = ${raw.contractMajor},")
+            appendLine("            providedCapabilities = ${raw.providedCapabilities.stringArray()},")
+            appendLine("            requiredCapabilities = ${raw.requiredCapabilities.stringArray()},")
+            appendLine("            compatibleSlotTypes = ${block?.compatibleSlotTypes.orEmpty().stringArray()},")
+            appendLine("            occupiedScrollAxes = ${block?.occupiedScrollAxes.orEmpty().stringArray()},")
+            appendLine("            childSlots = [")
+            slots.forEach { slot ->
+                appendLine("                org.quicklauncher.registry.annotations.ContributionRegistryFragmentSlot(")
+                appendLine("                    type = ${slot.type.quoted()},")
+                appendLine("                    acceptedBlocks = ${slot.acceptedBlocks.stringArray()},")
+                appendLine("                    requiredCapabilities = ${slot.requiredCapabilities.stringArray()},")
+                appendLine("                    maximumChildren = ${slot.maximumChildren},")
+                appendLine("                    allowedScrollAxes = ${slot.allowedScrollAxes.stringArray()},")
+                appendLine("                ),")
+            }
+            appendLine("            ],")
+            val template = raw.specific as? RawSpecificDescriptor.DestinationTemplate
+            appendLine(
+                "            requiredContributions = " +
+                    "${template?.requiredContributions.orEmpty().stringArray()},",
+            )
+            appendLine("        ),")
+        }
+        appendLine("    ],")
+        appendLine(")")
     }
 
     private fun StringBuilder.appendRegistration(registration: ValidatedRegistration) {
@@ -175,6 +224,12 @@ object RegistrySourceGenerator {
         prefix = "setOf(",
         postfix = ")",
     ) { value -> "org.quicklauncher.contracts.contribution.$type.$value" }
+
+    private fun List<String>.stringArray(): String = joinToString(
+        separator = ", ",
+        prefix = "[",
+        postfix = "]",
+    ) { it.quoted() }
 
     private fun parseColor(value: String): Long =
         if (value.startsWith("0x")) value.removePrefix("0x").toLong(16) else value.toLong()
