@@ -13,6 +13,13 @@ message StoredLauncherPreferences {
   optional string theme_profile_id = 5;
   StoredNotificationStyle notification_style = 6;
   StoredOnboardingState onboarding_state = 7;
+  StoredPrivateSpaceVisibility private_space_visibility = 8;
+}
+
+enum StoredPrivateSpaceVisibility {
+  STORED_PRIVATE_SPACE_VISIBILITY_UNSPECIFIED = 0;
+  STORED_PRIVATE_SPACE_VISIBILITY_VISIBLE = 1;
+  STORED_PRIVATE_SPACE_VISIBILITY_HIDDEN = 2;
 }
 
 enum StoredGestureMode {

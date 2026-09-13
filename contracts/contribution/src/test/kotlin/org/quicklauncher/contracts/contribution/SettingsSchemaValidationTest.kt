@@ -75,6 +75,11 @@ class SettingsSchemaValidationTest {
                     allowMultiple = true,
                     enabledWhen = capability,
                 ),
+                ContentSelectorSetting(
+                    StableKey.parse("folder"),
+                    "Folder",
+                    allowMultiple = false,
+                ),
             ),
         )
 

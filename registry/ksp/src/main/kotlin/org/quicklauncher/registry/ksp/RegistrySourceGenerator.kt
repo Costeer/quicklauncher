@@ -195,6 +195,8 @@ object RegistrySourceGenerator {
                 "default = ${prefix}FontRole.${field.defaultValue}, enabledWhen = $enabled)"
             "APP_SELECTOR" -> "${prefix}AppSelectorSetting($common, allowMultiple = ${field.allowMultiple}, " +
                 "enabledWhen = $enabled)"
+            "CONTENT_SELECTOR" -> "${prefix}ContentSelectorSetting($common, allowMultiple = ${field.allowMultiple}, " +
+                "enabledWhen = $enabled)"
             else -> error("Validated setting has unsupported kind '${field.kind}'")
         }
     }

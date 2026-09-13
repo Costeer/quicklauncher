@@ -404,6 +404,9 @@ object RegistryValidator {
             "APP_SELECTOR" -> if (field.defaultValue.isNotEmpty()) {
                 invalid("must not encode app identities in descriptor defaults")
             }
+            "CONTENT_SELECTOR" -> if (field.defaultValue.isNotEmpty()) {
+                invalid("must not encode content identities in descriptor defaults")
+            }
             else -> invalid("uses unknown kind '${field.kind}'")
         }
     }

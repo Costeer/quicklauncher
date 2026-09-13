@@ -26,12 +26,27 @@ private fun <T> immutable(values: Collection<T>): List<T> =
     Collections.unmodifiableList(ArrayList(values))
 
 fun interface PreparedContentSource {
-    fun contentFor(instanceId: ModuleInstanceId): PreparedHostContent
+    fun contentFor(instanceId: ModuleInstanceId): PreparedBlockContent
+}
+
+data class PreparedBlockContent(
+    val status: org.quicklauncher.contracts.ui.RenderStatus,
+    val content: PreparedHostContent,
+) {
+    companion object {
+        val Empty = PreparedBlockContent(
+            org.quicklauncher.contracts.ui.RenderStatus.Empty,
+            PreparedHostContent.Empty,
+        )
+
+        fun ready(content: PreparedHostContent): PreparedBlockContent =
+            PreparedBlockContent(org.quicklauncher.contracts.ui.RenderStatus.Ready, content)
+    }
 }
 
 /** Supplies the cold-start state needed by [CompositionEngine.restore]. */
 fun interface CompositionRestoreRequestSource {
-    suspend fun request(): CompositionRequest
+    suspend fun request(selectedLayoutInstanceId: ModuleInstanceId): CompositionRequest
 }
 
 fun interface CompositionPlaceholderRenderer {
@@ -39,22 +54,28 @@ fun interface CompositionPlaceholderRenderer {
     fun Render(issue: CompositionIssue, modifier: Modifier)
 }
 
+fun interface RendererFailureSink {
+    fun report(issue: CompositionIssue, failure: RuntimeException)
+}
+
 data class CompositionEnvironment(
     val theme: LauncherTheme,
     val window: WindowInfo,
     val backgroundContrast: BackgroundContrast,
     val editorMode: EditorMode,
-    val contentSource: PreparedContentSource = PreparedContentSource { PreparedHostContent.Empty },
+    val contentSource: PreparedContentSource = PreparedContentSource { PreparedBlockContent.Empty },
     val contentRenderer: PreparedContentRenderer = EmptyPreparedContentRenderer,
     val placeholderRenderer: CompositionPlaceholderRenderer = CompositionPlaceholderRenderer { _, _ -> },
     val layoutActions: ActionSink<LayoutAction> = RejectingLayoutActions,
     val blockActions: ActionSink<BlockAction> = RejectingBlockActions,
+    val rendererFailures: RendererFailureSink = RendererFailureSink { _, _ -> },
 )
 
 data class CompositionRequest(
     val snapshot: LauncherSnapshot,
     val currentDestinationId: DestinationId,
     val environment: CompositionEnvironment,
+    val currentInteractive: Boolean = true,
 )
 
 enum class CompositionIssueKind {
@@ -104,12 +125,15 @@ class PreparedComposition internal constructor(
     val destinations: List<PreparedDestination> = immutable(destinations)
 
     val current: PreparedDestination
-        get() = destinations.single { it.composition.isInteractive }
+        get() = destinations.single { it.composition.role == org.quicklauncher.contracts.ui.CompositionRole.CURRENT }
 }
 
 interface CompositionEngine : SelectedLayoutRestorer, AutoCloseable {
     /** Prepares the current destination and its cardinal neighbors as one live session set. */
     fun prepare(request: CompositionRequest): PreparedComposition
+
+    /** Disposes the live composition while keeping the engine available for a later prepare. */
+    fun release()
 }
 
 internal fun interface DestinationRenderer {

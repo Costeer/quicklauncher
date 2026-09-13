@@ -29,6 +29,7 @@ import org.quicklauncher.contracts.domain.PackageName
 import org.quicklauncher.contracts.domain.PlacementId
 import org.quicklauncher.contracts.domain.ProfileSerial
 import org.quicklauncher.contracts.domain.SchemaVersion
+import org.quicklauncher.contracts.domain.ShortcutId
 import org.quicklauncher.contracts.domain.StableKey
 import org.quicklauncher.host.data.spatial.DestinationCoordinate
 import org.quicklauncher.host.data.spatial.DestinationVector
@@ -1713,6 +1714,297 @@ class InMemoryLauncherStoreTest {
         assertEquals(StoreRejectionCode.STALE_REVISION, rejected.reason.code)
         assertSame(current, rejected.current)
         assertSame(current, store.read())
+    }
+
+    @Test
+    fun `widget binding edits preserve one id and remove failed allocations durably`() = runTest {
+        val placed = bootstrappedStore(placementPolicy = PlacementPolicy { null })
+        val withBlock = placed.commit(
+            LauncherTransaction(placed.read().revision, listOf(LauncherEdit.CommitDrop(samplePlacedModule("widget", 0)))),
+        ).committedState()
+        val pending = WidgetPlacementRecord(
+            moduleInstanceId = instanceId("widget"),
+            appWidgetId = 41,
+            providerPackage = PackageName.parse("org.example.widgets"),
+            providerClassName = "org.example.widgets.Clock",
+            profile = ProfileSerial.of(0),
+            intendedWidthDp = 180,
+            intendedHeightDp = 120,
+            bindState = WidgetBindState.PENDING,
+            restoreState = WidgetRestoreState.READY,
+        )
+
+        val begun = placed.commit(
+            LauncherTransaction(withBlock.revision, listOf(LauncherEdit.BeginWidgetBinding(pending))),
+        ).committedState()
+        val bound = placed.commit(
+            LauncherTransaction(
+                begun.revision,
+                listOf(LauncherEdit.CompleteWidgetBinding(instanceId("widget"))),
+            ),
+        ).committedState()
+        assertEquals(WidgetBindState.BOUND, bound.widgetPlacements.single().bindState)
+
+        val resized = placed.commit(
+            LauncherTransaction(
+                bound.revision,
+                listOf(LauncherEdit.UpdateWidgetSize(instanceId("widget"), 240, 160)),
+            ),
+        ).committedState()
+        assertEquals(240, resized.widgetPlacements.single().intendedWidthDp)
+
+        val cleanupPending = placed.commit(
+            LauncherTransaction(
+                resized.revision,
+                listOf(LauncherEdit.BeginWidgetDeletion(instanceId("widget"))),
+            ),
+        ).committedState()
+        val deleted = placed.commit(
+            LauncherTransaction(
+                cleanupPending.revision,
+                listOf(LauncherEdit.CompleteWidgetDeletion(instanceId("widget"))),
+            ),
+        ).committedState()
+        assertTrue(deleted.widgetPlacements.isEmpty())
+    }
+
+    @Test
+    fun `allocated widget ids cannot bypass coordinated cleanup`() = runTest {
+        val store = bootstrappedStore(placementPolicy = PlacementPolicy { null })
+        val block = samplePlacedModule("widget", 0)
+        val withBlock = store.commit(
+            LauncherTransaction(store.read().revision, listOf(LauncherEdit.CommitDrop(block))),
+        ).committedState()
+        val pending = WidgetPlacementRecord(
+            moduleInstanceId = block.instance.id,
+            appWidgetId = 91,
+            providerPackage = PackageName.parse("org.example.widgets"),
+            providerClassName = "org.example.widgets.Clock",
+            profile = ProfileSerial.of(0),
+            intendedWidthDp = 180,
+            intendedHeightDp = 120,
+            bindState = WidgetBindState.PENDING,
+            restoreState = WidgetRestoreState.READY,
+        )
+        val begun = store.commit(
+            LauncherTransaction(withBlock.revision, listOf(LauncherEdit.BeginWidgetBinding(pending))),
+        ).committedState()
+
+        listOf<LauncherEdit>(
+            LauncherEdit.DeleteWidgetPlacement(block.instance.id),
+            LauncherEdit.RemovePlacedSubtree(block.placement.id, confirmed = true),
+        ).forEach { edit ->
+            val rejected = store.commit(
+                LauncherTransaction(begun.revision, listOf(edit)),
+            ) as CommitResult.Rejected
+            assertEquals(StoreRejectionCode.RECOVERY_STATE_MISMATCH, rejected.reason.code)
+            assertSame(begun, rejected.current)
+            assertSame(begun, store.read())
+        }
+
+        val cleanupPending = store.commit(
+            LauncherTransaction(begun.revision, listOf(LauncherEdit.BeginWidgetDeletion(block.instance.id))),
+        ).committedState()
+        listOf<LauncherEdit>(
+            LauncherEdit.CompleteWidgetBinding(block.instance.id),
+            LauncherEdit.CancelWidgetBinding(block.instance.id),
+            LauncherEdit.DeleteWidgetPlacement(block.instance.id),
+        ).forEach { edit ->
+            val rejected = store.commit(
+                LauncherTransaction(cleanupPending.revision, listOf(edit)),
+            ) as CommitResult.Rejected
+            assertEquals(StoreRejectionCode.RECOVERY_STATE_MISMATCH, rejected.reason.code)
+            assertSame(cleanupPending, rejected.current)
+            assertSame(cleanupPending, store.read())
+        }
+    }
+
+    @Test
+    fun `destination and retained layout deletion reject allocated descendant widgets`() = runTest {
+        suspend fun addAllocatedWidget(
+            store: InMemoryLauncherStore,
+            block: NewPlacedModule,
+        ): LauncherSnapshot {
+            val placed = store.commit(
+                LauncherTransaction(store.read().revision, listOf(LauncherEdit.CommitDrop(block))),
+            ).committedState()
+            return store.commit(
+                LauncherTransaction(
+                    placed.revision,
+                    listOf(
+                        LauncherEdit.BeginWidgetBinding(
+                            WidgetPlacementRecord(
+                                moduleInstanceId = block.instance.id,
+                                appWidgetId = 92,
+                                providerPackage = PackageName.parse("org.example.widgets"),
+                                providerClassName = "org.example.widgets.Clock",
+                                profile = ProfileSerial.of(0),
+                                intendedWidthDp = 180,
+                                intendedHeightDp = 120,
+                                bindState = WidgetBindState.PENDING,
+                                restoreState = WidgetRestoreState.READY,
+                            ),
+                        ),
+                    ),
+                ),
+            ).committedState()
+        }
+
+        val destinationStore = bootstrappedStore(placementPolicy = PlacementPolicy { null })
+        val installed = destinationStore.commit(
+            LauncherTransaction(
+                destinationStore.read().revision,
+                listOf(LauncherEdit.InstallDestination(sampleInstall("right", 1, 0))),
+            ),
+        ).committedState()
+        val destinationBlockFixture = samplePlacedModule("destination-widget", 0)
+        val destinationBlock = NewPlacedModule(
+            destinationBlockFixture.instance,
+            destinationBlockFixture.configuration,
+            destinationBlockFixture.placement.copy(
+                layoutInstanceId = instanceId("right-layout"),
+                parentInstanceId = instanceId("right-layout"),
+            ),
+        )
+        val withDestinationWidget = addAllocatedWidget(destinationStore, destinationBlock)
+        val destinationRejected = destinationStore.commit(
+            LauncherTransaction(
+                withDestinationWidget.revision,
+                listOf(LauncherEdit.DeleteDestination(destinationId("right"), confirmed = true)),
+            ),
+        ) as CommitResult.Rejected
+        assertEquals(StoreRejectionCode.RECOVERY_STATE_MISMATCH, destinationRejected.reason.code)
+        assertSame(withDestinationWidget, destinationRejected.current)
+        assertSame(withDestinationWidget, destinationStore.read())
+        assertEquals(installed.destinations.size, 2)
+
+        val retainedStore = bootstrappedStore(placementPolicy = PlacementPolicy { null })
+        val retainedFixture = sampleInstall("start", 0, 0, layoutLocal = "list")
+        retainedStore.commit(
+            LauncherTransaction(
+                retainedStore.read().revision,
+                listOf(LauncherEdit.RetainLayout(
+                    retainedFixture.layout,
+                    retainedFixture.layoutInstance,
+                    retainedFixture.configuration,
+                )),
+            ),
+        ).committedState()
+        val retainedBlockFixture = samplePlacedModule("retained-widget", 0)
+        val retainedBlock = NewPlacedModule(
+            retainedBlockFixture.instance,
+            retainedBlockFixture.configuration,
+            retainedBlockFixture.placement.copy(
+                layoutInstanceId = retainedFixture.layoutInstance.id,
+                parentInstanceId = retainedFixture.layoutInstance.id,
+            ),
+        )
+        val withRetainedWidget = addAllocatedWidget(retainedStore, retainedBlock)
+        val retainedRejected = retainedStore.commit(
+            LauncherTransaction(
+                withRetainedWidget.revision,
+                listOf(LauncherEdit.RemoveRetainedLayout(retainedFixture.layoutInstance.id, confirmed = true)),
+            ),
+        ) as CommitResult.Rejected
+        assertEquals(StoreRejectionCode.RECOVERY_STATE_MISMATCH, retainedRejected.reason.code)
+        assertSame(withRetainedWidget, retainedRejected.current)
+        assertSame(withRetainedWidget, retainedStore.read())
+    }
+
+    @Test
+    fun `widget deletion remains durable until framework cleanup completes`() = runTest {
+        val store = bootstrappedStore(placementPolicy = PlacementPolicy { null })
+        val withBlock = store.commit(
+            LauncherTransaction(store.read().revision, listOf(LauncherEdit.CommitDrop(samplePlacedModule("widget", 0)))),
+        ).committedState()
+        val pending = WidgetPlacementRecord(
+            moduleInstanceId = instanceId("widget"),
+            appWidgetId = 73,
+            providerPackage = PackageName.parse("org.example.widgets"),
+            providerClassName = "org.example.widgets.Clock",
+            profile = ProfileSerial.of(0),
+            intendedWidthDp = 180,
+            intendedHeightDp = 120,
+            bindState = WidgetBindState.PENDING,
+            restoreState = WidgetRestoreState.READY,
+        )
+        val begun = store.commit(
+            LauncherTransaction(withBlock.revision, listOf(LauncherEdit.BeginWidgetBinding(pending))),
+        ).committedState()
+        val bound = store.commit(
+            LauncherTransaction(begun.revision, listOf(LauncherEdit.CompleteWidgetBinding(instanceId("widget")))),
+        ).committedState()
+
+        val cleanupPending = store.commit(
+            LauncherTransaction(bound.revision, listOf(LauncherEdit.BeginWidgetDeletion(instanceId("widget")))),
+        ).committedState()
+
+        assertEquals(73, cleanupPending.widgetPlacements.single().appWidgetId)
+        assertEquals(WidgetCleanupState.DELETE_PENDING, cleanupPending.widgetPlacements.single().cleanupState)
+
+        val cleaned = store.commit(
+            LauncherTransaction(
+                cleanupPending.revision,
+                listOf(LauncherEdit.CompleteWidgetDeletion(instanceId("widget"))),
+            ),
+        ).committedState()
+        assertTrue(cleaned.widgetPlacements.isEmpty())
+    }
+
+    @Test
+    fun `duplicate shortcut targets and explicit folder order survive task edits`() = runTest {
+        val store = bootstrappedStore()
+        val target = ShortcutTarget(
+            ProfileSerial.of(10),
+            PackageName.parse("org.example.calendar"),
+            ShortcutId.parse("next-event"),
+        )
+        val first = ContentItemRecord.shortcut(
+            ContentItemId.parse("org.quicklauncher.content/shortcut-one"),
+            "{}",
+            target,
+        )
+        val second = ContentItemRecord.shortcut(
+            ContentItemId.parse("org.quicklauncher.content/shortcut-two"),
+            "{}",
+            target,
+        )
+        val folder = ContentItemRecord(
+            ContentItemId.parse("org.quicklauncher.content/folder"),
+            ContentItemKind.FOLDER,
+            "{\"name\":\"Work\"}",
+        )
+
+        val committed = store.commit(
+            LauncherTransaction(
+                store.read().revision,
+                listOf(
+                    LauncherEdit.CreateShortcutPlacement(first),
+                    LauncherEdit.CreateShortcutPlacement(second),
+                    LauncherEdit.CreateFolder(folder, listOf(first.id, second.id)),
+                ),
+            ),
+        ).committedState()
+
+        assertEquals(2, committed.contentItems.count { it.shortcutTarget == target })
+        assertEquals(listOf(first.id, second.id), committed.folderMembers.map { it.memberId })
+
+        val removed = store.commit(
+            LauncherTransaction(
+                committed.revision,
+                listOf(LauncherEdit.RemoveShortcutPlacement(first.id)),
+            ),
+        ).committedState()
+        assertEquals(listOf(FolderMemberRecord(folder.id, second.id, 0)), removed.folderMembers)
+
+        val readded = store.commit(
+            LauncherTransaction(
+                removed.revision,
+                listOf(LauncherEdit.SetFolderMembership(folder.id, first, included = true)),
+            ),
+        ).committedState()
+        assertEquals(listOf(second.id, first.id), readded.folderMembers.map { it.memberId })
+        assertEquals(listOf(0, 1), readded.folderMembers.map { it.index })
     }
 
     private suspend fun bootstrappedStore(

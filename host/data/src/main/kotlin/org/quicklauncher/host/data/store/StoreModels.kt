@@ -116,6 +116,7 @@ data class PlacementRecord(
 }
 
 enum class ContentItemKind {
+    APP,
     FOLDER,
     FAVORITE,
     SHORTCUT,
@@ -252,6 +253,12 @@ enum class WidgetRestoreState {
     REBIND_REQUIRED,
 }
 
+enum class WidgetCleanupState {
+    NONE,
+    DELETE_PENDING,
+    REBIND_PENDING,
+}
+
 data class WidgetPlacementRecord(
     val moduleInstanceId: ModuleInstanceId,
     val appWidgetId: Int?,
@@ -262,6 +269,7 @@ data class WidgetPlacementRecord(
     val intendedHeightDp: Int,
     val bindState: WidgetBindState,
     val restoreState: WidgetRestoreState,
+    val cleanupState: WidgetCleanupState = WidgetCleanupState.NONE,
 ) {
     init {
         require(appWidgetId == null || appWidgetId >= 0) { "Widget ID must be null or nonnegative" }
@@ -357,6 +365,31 @@ class LauncherSnapshot internal constructor(
         immutableList(destinationBackgrounds.sortedBy { it.destinationId.value })
     val crashMarkers: List<CrashMarkerRecord> = immutableList(crashMarkers.sortedBy { it.id.value })
 
+    /**
+     * Rebuilds the composition-owned portion of a durable snapshot after decoding persisted data.
+     * The result remains immutable; validation belongs to the consuming recovery module.
+     */
+    fun withRestoredComposition(
+        destinationLayouts: Collection<DestinationLayoutRecord> = this.destinationLayouts,
+        configurationDocuments: Collection<StoredConfigurationDocument> = this.configurationDocuments,
+        placements: Collection<PlacementRecord> = this.placements,
+    ): LauncherSnapshot = LauncherSnapshot(
+        revision = revision,
+        startDestinationId = startDestinationId,
+        destinations = destinations,
+        destinationLayouts = destinationLayouts,
+        moduleInstances = moduleInstances,
+        configurationDocuments = configurationDocuments,
+        placements = placements,
+        contentItems = contentItems,
+        folderMembers = folderMembers,
+        appOverrides = appOverrides,
+        widgetPlacements = widgetPlacements,
+        themeProfiles = themeProfiles,
+        destinationBackgrounds = destinationBackgrounds,
+        crashMarkers = crashMarkers,
+    )
+
     override fun equals(other: Any?): Boolean = other is LauncherSnapshot &&
         revision == other.revision &&
         startDestinationId == other.startDestinationId &&
@@ -408,6 +441,17 @@ class LauncherSnapshot internal constructor(
             moduleInstances = emptyList(),
             configurationDocuments = emptyList(),
             placements = emptyList(),
+        )
+
+        /** Builds the immutable composition snapshot shown before an atomic plan installation. */
+        fun preview(installation: LauncherPlanInstallation): LauncherSnapshot = LauncherSnapshot(
+            revision = StoreRevision.ZERO,
+            startDestinationId = installation.startDestinationId,
+            destinations = installation.destinations,
+            destinationLayouts = installation.layouts,
+            moduleInstances = installation.moduleInstances,
+            configurationDocuments = installation.configurations,
+            placements = installation.placements,
         )
     }
 }

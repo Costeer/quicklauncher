@@ -87,6 +87,32 @@ class LauncherEditorTest {
     }
 
     @Test
+    fun `confirmation applies only to the destination that requested it`() = runTest {
+        val store = seededStore()
+        check(
+            store.commit(
+                LauncherTransaction(
+                    store.read().revision,
+                    listOf(LauncherEdit.InstallDestination(install(UP, 0, -1))),
+                ),
+            ) is CommitResult.Committed,
+        )
+        val editor = DefaultLauncherEditor(store, backgroundScope)
+        editor.start()
+
+        assertTrue(editor.dispatch(EditorAction.Delete(RIGHT, confirmed = false)) is EditorResult.Rejected)
+        val wrongConfirmation = editor.dispatch(EditorAction.Delete(UP, confirmed = true))
+
+        assertTrue(wrongConfirmation is EditorResult.Rejected)
+        assertEquals(setOf(CENTER, RIGHT, UP), store.read().destinations.mapTo(mutableSetOf()) { it.id })
+        assertEquals(
+            EditorConfirmation.DeleteDestination(RIGHT),
+            editor.state.value.pendingConfirmation,
+        )
+        editor.close()
+    }
+
+    @Test
     fun `configuration reset uses the registered default through the validated store path`() = runTest {
         val codec = EditorTestCodec()
         val store = seededStore(ConfigurationResolver { configurationLoader(codec) })
@@ -166,6 +192,7 @@ class LauncherEditorTest {
     private companion object {
         val CENTER = DestinationId.parse("org.quicklauncher.destination/center")
         val RIGHT = DestinationId.parse("org.quicklauncher.destination/right")
+        val UP = DestinationId.parse("org.quicklauncher.destination/up")
         val RIGHT_LAYOUT = ModuleInstanceId.parse("org.quicklauncher.instance/right-layout")
     }
 }

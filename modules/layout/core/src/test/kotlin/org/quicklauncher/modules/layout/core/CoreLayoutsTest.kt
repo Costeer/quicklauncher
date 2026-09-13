@@ -4,8 +4,15 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.quicklauncher.contracts.contribution.CodecResult
+import org.quicklauncher.modules.layout.core.generated.CoreLayoutRegistry
+import org.quicklauncher.testing.contracts.RegisteredContributionContractSuite
 
 class CoreLayoutsTest {
+    @Test
+    fun `every layout satisfies the reusable public contribution contract suite`() {
+        RegisteredContributionContractSuite.verify(CoreLayoutRegistry.entries)
+    }
+
     @Test
     fun `grid configuration round trips and rejects out of range columns`() {
         val value = GridLayoutConfiguration(6)

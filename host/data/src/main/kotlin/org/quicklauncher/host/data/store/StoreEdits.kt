@@ -3,6 +3,7 @@ package org.quicklauncher.host.data.store
 import java.util.Collections
 import org.quicklauncher.contracts.contribution.ConfigurationDocument
 import org.quicklauncher.contracts.domain.ConfigurationDocumentId
+import org.quicklauncher.contracts.domain.ContentItemId
 import org.quicklauncher.contracts.domain.DestinationId
 import org.quicklauncher.contracts.domain.ModuleInstanceId
 import org.quicklauncher.contracts.domain.PlacementId
@@ -196,4 +197,85 @@ sealed interface LauncherEdit {
 
     /** Lets the user explicitly reactivate an instance isolated for renderer failure. */
     data class RetryRenderer(val moduleInstanceId: ModuleInstanceId) : LauncherEdit
+
+    /** Records an allocated framework ID before any bind or configuration UI is launched. */
+    data class BeginWidgetBinding(val placement: WidgetPlacementRecord) : LauncherEdit
+
+    data class CompleteWidgetBinding(val moduleInstanceId: ModuleInstanceId) : LauncherEdit
+
+    /** Removes a pending allocation after the framework ID has been deleted. */
+    data class CancelWidgetBinding(val moduleInstanceId: ModuleInstanceId) : LauncherEdit
+
+    /** Keeps a retryable placement without retaining the failed framework ID. */
+    data class FailWidgetBinding(val moduleInstanceId: ModuleInstanceId) : LauncherEdit
+
+    data class UpdateWidgetSize(
+        val moduleInstanceId: ModuleInstanceId,
+        val widthDp: Int,
+        val heightDp: Int,
+    ) : LauncherEdit {
+        init {
+            require(widthDp > 0 && heightDp > 0) { "Widget dimensions must be positive" }
+        }
+    }
+
+    data class ReplaceRestoredWidgetId(
+        val moduleInstanceId: ModuleInstanceId,
+        val appWidgetId: Int,
+    ) : LauncherEdit {
+        init {
+            require(appWidgetId >= 0) { "Widget ID must not be negative" }
+        }
+    }
+
+    /** Makes framework deletion retryable across process death and adapter failure. */
+    data class BeginWidgetDeletion(val moduleInstanceId: ModuleInstanceId) : LauncherEdit
+
+    /** Removes the durable cleanup marker only after the framework confirms deletion. */
+    data class CompleteWidgetDeletion(val moduleInstanceId: ModuleInstanceId) : LauncherEdit
+
+    /** Records that an invalid framework binding must be deleted before this placement can rebind. */
+    data class BeginWidgetInvalidation(val moduleInstanceId: ModuleInstanceId) : LauncherEdit
+
+    /** Retains the semantic placement and marks it pending rebind after framework cleanup. */
+    data class CompleteWidgetInvalidation(val moduleInstanceId: ModuleInstanceId) : LauncherEdit
+
+    data class DeleteWidgetPlacement(val moduleInstanceId: ModuleInstanceId) : LauncherEdit
+
+    data class CreateShortcutPlacement(val item: ContentItemRecord) : LauncherEdit
+
+    data class RemoveShortcutPlacement(val contentItemId: ContentItemId) : LauncherEdit
+
+    class CreateFolder(
+        val folder: ContentItemRecord,
+        members: Collection<ContentItemId> = emptyList(),
+    ) : LauncherEdit {
+        val members: List<ContentItemId> = Collections.unmodifiableList(ArrayList(members))
+    }
+
+    data class RenameFolder(val folderId: ContentItemId, val encoded: String) : LauncherEdit
+
+    class SetFolderMembers(
+        val folderId: ContentItemId,
+        members: Collection<ContentItemId>,
+    ) : LauncherEdit {
+        val members: List<ContentItemId> = Collections.unmodifiableList(ArrayList(members))
+    }
+
+    /** Adds or removes one shared content reference while preserving explicit folder order. */
+    data class SetFolderMembership(
+        val folderId: ContentItemId,
+        val member: ContentItemRecord,
+        val included: Boolean,
+    ) : LauncherEdit
+
+    data class DeleteFolder(val folderId: ContentItemId, val confirmed: Boolean) : LauncherEdit
+
+    data class PutAppOverride(val override: AppOverrideRecord) : LauncherEdit
+
+    data class RemoveAppOverride(
+        val profile: org.quicklauncher.contracts.domain.ProfileSerial,
+        val packageName: org.quicklauncher.contracts.domain.PackageName,
+        val activityName: String,
+    ) : LauncherEdit
 }

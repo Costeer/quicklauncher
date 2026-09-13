@@ -117,6 +117,13 @@ data class AppSelectorSetting(
     override val enabledWhen: CapabilityId? = null,
 ) : SettingField
 
+data class ContentSelectorSetting(
+    override val key: StableKey,
+    override val label: String,
+    val allowMultiple: Boolean,
+    override val enabledWhen: CapabilityId? = null,
+) : SettingField
+
 object SettingsSchemaValidator {
     fun validate(schema: SettingsSchema): ValidationResult {
         val errors = mutableListOf<ValidationError>()
@@ -172,6 +179,7 @@ object SettingsSchemaValidator {
                 }
                 is FontSetting -> validateFont(field, path, errors)
                 is AppSelectorSetting -> Unit
+                is ContentSelectorSetting -> Unit
             }
         }
 

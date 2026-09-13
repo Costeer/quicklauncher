@@ -12,6 +12,9 @@ android {
     buildFeatures {
         compose = true
     }
+    defaultConfig {
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
     testOptions {
         unitTests.isIncludeAndroidResources = true
     }
@@ -29,16 +32,36 @@ dependencies {
     api(libs.kotlinx.coroutines.core)
 
     api(platform(libs.androidx.compose.bom))
+    api(libs.androidx.compose.foundation.layout)
     api(libs.androidx.compose.runtime)
     api(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.foundation)
-    implementation(libs.androidx.compose.foundation.layout)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.ui.geometry)
+    implementation(libs.androidx.compose.ui.graphics)
+    implementation(libs.androidx.compose.ui.text)
+    implementation(libs.androidx.compose.ui.unit)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.androidx.compose.ui.test)
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    testImplementation(libs.androidx.compose.ui.geometry)
+    testImplementation(libs.androidx.compose.ui.graphics)
+    testImplementation(libs.androidx.test.ext.junit)
+    testImplementation(project(":contracts:ui"))
+    testImplementation(libs.robolectric.annotations)
     testImplementation("com.android.tools.layoutlib:layoutlib-api:31.11.0-rc02")
     testRuntimeOnly(libs.robolectric)
+    androidTestImplementation(libs.androidx.compose.ui.test)
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    androidTestImplementation(libs.androidx.compose.ui.geometry)
+    androidTestImplementation(libs.androidx.compose.ui.unit)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+    debugRuntimeOnly(libs.androidx.compose.ui.test.manifest)
+    releaseRuntimeOnly(libs.androidx.compose.ui.test.manifest)
 }
 
 licensee {

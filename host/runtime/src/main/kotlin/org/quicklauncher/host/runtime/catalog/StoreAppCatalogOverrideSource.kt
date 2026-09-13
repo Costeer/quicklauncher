@@ -23,6 +23,7 @@ internal fun mapAppOverrides(records: Collection<AppOverrideRecord>): List<AppCa
             icon = record.encodedIcon?.let(::decodeIcon),
             favorite = record.favorite,
             collectionVisible = record.collectionVisible,
+            searchVisible = record.searchVisible,
         )
     }
 

@@ -176,12 +176,43 @@ enum class PreparedContentKind {
     TEXT,
 }
 
+/** Profile information safe for ordinary contribution rendering. Private profiles never cross this seam. */
+enum class PreparedProfileKind {
+    PERSONAL,
+    WORK,
+    NOT_APPLICABLE,
+}
+
+enum class PreparedAvailability {
+    AVAILABLE,
+    UNAVAILABLE,
+}
+
+/** Sanitized notification state. It deliberately has no field capable of carrying content. */
+sealed interface NotificationIndicator {
+    data object None : NotificationIndicator
+    data object Dot : NotificationIndicator
+
+    data class ApproximateCount(val bucket: Int) : NotificationIndicator {
+        init {
+            require(bucket > 0) { "Approximate notification count must be positive" }
+        }
+    }
+}
+
 data class PreparedContentItem(
     val id: ContentItemId,
     val label: String,
     val supportingText: String?,
     val kind: PreparedContentKind,
     val enabled: Boolean,
+    val profile: PreparedProfileKind = PreparedProfileKind.NOT_APPLICABLE,
+    val availability: PreparedAvailability = if (enabled) {
+        PreparedAvailability.AVAILABLE
+    } else {
+        PreparedAvailability.UNAVAILABLE
+    },
+    val indicator: NotificationIndicator = NotificationIndicator.None,
 ) {
     init {
         require(label.isNotBlank()) { "Prepared content label must not be blank" }

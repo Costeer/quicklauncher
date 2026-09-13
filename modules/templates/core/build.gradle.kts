@@ -13,11 +13,13 @@ ksp {
 }
 
 dependencies {
-    implementation(project(":contracts:domain"))
-    implementation(project(":contracts:contribution"))
+    api(project(":contracts:domain"))
+    api(project(":contracts:contribution"))
+    api(project(":contracts:ui"))
     compileOnly(project(":registry:annotations"))
     ksp(project(":registry:ksp"))
     testImplementation(libs.junit)
+    testImplementation(project(":testing:contracts"))
 }
 
 licensee { allow("Apache-2.0") }

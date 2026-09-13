@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.licensee)
+    alias(libs.plugins.paparazzi)
 }
 
 android {
@@ -45,6 +46,10 @@ android {
         compose = true
     }
 
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -54,6 +59,7 @@ android {
 dependencies {
     implementation(project(":contracts:domain"))
     implementation(project(":contracts:contribution"))
+    implementation(project(":contracts:ui"))
     implementation(project(":host:data"))
     implementation(project(":host:editor"))
     implementation(project(":host:platform"))
@@ -64,19 +70,28 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.foundation)
+    implementation(libs.androidx.compose.foundation.layout)
     implementation(libs.androidx.compose.runtime)
     implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.ui.graphics)
+    implementation(libs.androidx.compose.ui.text)
+    implementation(libs.androidx.compose.ui.unit)
     implementation(libs.kotlinx.coroutines.core)
 
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation("com.android.tools.layoutlib:layoutlib-api:31.11.0-rc02")
 
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.monitor)
     androidTestImplementation(libs.androidx.test.uiautomator)
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.compose.ui.test)
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.junit)
-    androidTestImplementation(project(":contracts:contribution"))
     androidTestImplementation("org.jspecify:jspecify:1.0.0")
-    androidTestRuntimeOnly(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.runner)
 }
 
 licensee {

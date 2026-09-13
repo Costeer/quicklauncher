@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Quicklauncher implementation, verification, device evidence, and open Phase 5 gates as of 14 September 2026.">
+  <title>Quicklauncher · Current state</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #090b10;
+      --surface: #11151d;
+      --surface-2: #171c27;
+      --line: #293140;
+      --text: #f2f5f8;
+      --muted: #9da8b6;
+      --green: #65d99b;
+      --green-dim: #19382a;
+      --amber: #ffca69;
+      --amber-dim: #3a2d16;
+      --blue: #7cb8ff;
+      --violet: #bd9cff;
+      --shadow: 0 18px 60px rgba(0, 0, 0, .28);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 82% -10%, rgba(124, 184, 255, .12), transparent 38rem),
+        radial-gradient(circle at 12% 8%, rgba(101, 217, 155, .09), transparent 28rem),
+        var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.5;
+    }
+
+    a { color: inherit; }
+    button { font: inherit; }
+    .shell { width: min(1180px, calc(100% - 32px)); margin: 0 auto; }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      border-bottom: 1px solid rgba(255, 255, 255, .07);
+      background: rgba(9, 11, 16, .82);
+      backdrop-filter: blur(18px);
+    }
+    .topbar-inner {
+      min-height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+    .brand { display: flex; align-items: center; gap: 11px; font-weight: 760; letter-spacing: -.02em; }
+    .mark {
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      border-radius: 9px;
+      color: #07130d;
+      background: var(--green);
+      box-shadow: 0 0 30px rgba(101, 217, 155, .28);
+      font-weight: 900;
+    }
+    nav { display: flex; gap: 20px; color: var(--muted); font-size: 14px; }
+    nav a { text-decoration: none; }
+    nav a:hover { color: var(--text); }
+
+    .hero { padding: 84px 0 54px; }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border: 1px solid rgba(255, 202, 105, .3);
+      border-radius: 999px;
+      color: var(--amber);
+      background: rgba(255, 202, 105, .06);
+      font-size: 12px;
+      font-weight: 760;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .eyebrow::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    h1 { max-width: 850px; margin: 22px 0 18px; font-size: clamp(46px, 7vw, 84px); line-height: .98; letter-spacing: -.065em; }
+    .hero-copy { max-width: 760px; margin: 0; color: var(--muted); font-size: clamp(18px, 2vw, 22px); }
+    .hero-copy strong { color: var(--text); font-weight: 700; }
+
+    .phase-track {
+      margin-top: 44px;
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 8px;
+    }
+    .phase {
+      min-height: 94px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(17, 21, 29, .86);
+    }
+    .phase span { display: block; color: var(--muted); font-size: 12px; }
+    .phase strong { display: block; margin-top: 18px; font-size: 14px; }
+    .phase.done { border-color: rgba(101, 217, 155, .26); background: linear-gradient(145deg, rgba(101, 217, 155, .11), rgba(17, 21, 29, .9)); }
+    .phase.current { border-color: rgba(255, 202, 105, .5); background: linear-gradient(145deg, rgba(255, 202, 105, .13), rgba(17, 21, 29, .9)); box-shadow: 0 0 0 1px rgba(255, 202, 105, .08) inset; }
+    .phase.future { opacity: .5; }
+
+    section { padding: 38px 0; }
+    .section-head { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 22px; }
+    .section-head h2 { margin: 0; font-size: clamp(28px, 4vw, 42px); letter-spacing: -.045em; }
+    .section-head p { max-width: 520px; margin: 0; color: var(--muted); }
+
+    .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    .metric, .card {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: linear-gradient(160deg, rgba(23, 28, 39, .96), rgba(14, 18, 25, .96));
+      box-shadow: var(--shadow);
+    }
+    .metric { padding: 22px; }
+    .metric .value { display: block; font-size: clamp(30px, 4vw, 48px); line-height: 1; letter-spacing: -.05em; font-weight: 790; }
+    .metric .label { display: block; margin-top: 10px; color: var(--muted); font-size: 13px; }
+    .metric .delta { margin-top: 18px; color: var(--green); font-size: 12px; font-weight: 720; }
+
+    .architecture { padding: 26px; overflow: hidden; }
+    .flow { display: grid; grid-template-columns: 1fr 50px 1fr 50px 1fr; align-items: stretch; gap: 8px; }
+    .layer { padding: 22px; border: 1px solid var(--line); border-radius: 16px; background: rgba(9, 11, 16, .45); }
+    .layer small { color: var(--blue); text-transform: uppercase; letter-spacing: .08em; font-weight: 760; }
+    .layer h3 { margin: 8px 0 10px; font-size: 20px; }
+    .layer p { margin: 0; color: var(--muted); font-size: 14px; }
+    .arrow { display: grid; place-items: center; color: var(--blue); font-size: 26px; }
+    .boundary {
+      margin-top: 18px;
+      padding: 13px 16px;
+      border: 1px dashed rgba(189, 156, 255, .48);
+      border-radius: 12px;
+      color: #d9c9ff;
+      background: rgba(189, 156, 255, .06);
+      font-size: 13px;
+      text-align: center;
+    }
+
+    .capability-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+    .capability { padding: 22px; position: relative; }
+    .capability header { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+    .capability h3 { margin: 0; font-size: 18px; }
+    .status {
+      padding: 4px 8px;
+      border-radius: 999px;
+      color: var(--green);
+      background: var(--green-dim);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+    .capability p { margin: 14px 0 0; color: var(--muted); font-size: 14px; }
+    .capability ul { margin: 14px 0 0; padding-left: 18px; color: #c7ced8; font-size: 13px; }
+    .capability li + li { margin-top: 5px; }
+
+    .evidence-grid { display: grid; grid-template-columns: 1.05fr .95fr; gap: 14px; }
+    .evidence-card { padding: 24px; }
+    .evidence-card h3 { margin: 0 0 18px; font-size: 20px; }
+    .device-row { display: grid; grid-template-columns: 150px 1fr auto; align-items: center; gap: 18px; padding: 16px 0; border-top: 1px solid var(--line); }
+    .device-row:first-of-type { border-top: 0; padding-top: 0; }
+    .device-name strong, .device-name span { display: block; }
+    .device-name span { margin-top: 3px; color: var(--muted); font-size: 12px; }
+    .bar { height: 10px; border-radius: 999px; overflow: hidden; background: #252c38; }
+    .bar > span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--green), #8ce7b5); }
+    .score { color: var(--muted); font-size: 12px; white-space: nowrap; }
+    .score strong { color: var(--text); font-size: 15px; }
+
+    .schema-line { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-top: 25px; }
+    .schema-node { position: relative; text-align: center; }
+    .schema-node::before { content: ""; display: block; height: 3px; margin-bottom: 12px; background: var(--green); }
+    .schema-node:first-child::before { border-radius: 999px 0 0 999px; }
+    .schema-node:last-child::before { border-radius: 0 999px 999px 0; }
+    .schema-node b { display: grid; place-items: center; width: 34px; height: 34px; margin: 0 auto; border-radius: 50%; background: var(--green-dim); color: var(--green); }
+    .schema-node span { display: block; margin-top: 8px; color: var(--muted); font-size: 11px; }
+
+    .blocker {
+      display: grid;
+      grid-template-columns: 10px 1fr auto;
+      gap: 22px;
+      align-items: center;
+      padding: 26px;
+      border-color: rgba(255, 202, 105, .4);
+      background: linear-gradient(145deg, rgba(58, 45, 22, .82), rgba(17, 21, 29, .96));
+    }
+    .blocker-line { align-self: stretch; border-radius: 999px; background: var(--amber); }
+    .blocker h2 { margin: 0 0 7px; color: var(--amber); font-size: 24px; }
+    .blocker p { max-width: 760px; margin: 0; color: #d5ccbb; }
+    .blocker a { padding: 10px 14px; border: 1px solid rgba(255, 202, 105, .42); border-radius: 10px; color: var(--amber); text-decoration: none; white-space: nowrap; font-size: 13px; font-weight: 700; }
+
+    .command-list { display: grid; gap: 10px; }
+    details { border: 1px solid var(--line); border-radius: 13px; background: rgba(17, 21, 29, .72); }
+    summary { padding: 15px 17px; cursor: pointer; color: #d9dfe7; font-weight: 650; }
+    pre { margin: 0; padding: 0 17px 17px; overflow-x: auto; color: #a9d5ff; font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; }
+
+    footer { padding: 40px 0 64px; color: var(--muted); font-size: 13px; }
+    footer .shell { display: flex; justify-content: space-between; gap: 20px; border-top: 1px solid var(--line); padding-top: 24px; }
+    footer a { color: var(--blue); text-decoration: none; }
+
+    @media (max-width: 900px) {
+      nav { display: none; }
+      .phase-track { grid-template-columns: repeat(4, 1fr); }
+      .metric-grid { grid-template-columns: repeat(2, 1fr); }
+      .flow { grid-template-columns: 1fr; }
+      .arrow { transform: rotate(90deg); min-height: 30px; }
+      .evidence-grid { grid-template-columns: 1fr; }
+      .blocker { grid-template-columns: 8px 1fr; }
+      .blocker a { grid-column: 2; width: fit-content; }
+    }
+    @media (max-width: 620px) {
+      .shell { width: min(100% - 22px, 1180px); }
+      .hero { padding-top: 54px; }
+      .phase-track, .metric-grid, .capability-grid { grid-template-columns: 1fr; }
+      .phase { min-height: auto; }
+      .phase strong { margin-top: 8px; }
+      .section-head { display: block; }
+      .section-head p { margin-top: 8px; }
+      .device-row { grid-template-columns: 1fr auto; }
+      .device-row .bar { grid-column: 1 / -1; grid-row: 2; }
+      footer .shell { display: block; }
+    }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="shell topbar-inner">
+      <div class="brand"><span class="mark" aria-hidden="true">Q</span> Quicklauncher</div>
+      <nav aria-label="Page sections">
+        <a href="#architecture">Architecture</a>
+        <a href="#capabilities">Phase 5</a>
+        <a href="#evidence">Evidence</a>
+        <a href="#blocker">Open gate</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="shell">
+        <span class="eyebrow">Phase 5 implementation ready · evidence blocked</span>
+        <h1>A launcher built around hard boundaries.</h1>
+        <p class="hero-copy"><strong>Phases 0–4 are complete.</strong> Widgets, shortcuts, profiles, Private Space, indicators, folders, and item actions are implemented and green across local and available device gates. One real managed-work-profile run still stands between Phase 5 and completion.</p>
+
+        <div class="phase-track" aria-label="Project phase progress">
+          <div class="phase done"><span>Phase 0</span><strong>Foundation ✓</strong></div>
+          <div class="phase done"><span>Phase 1</span><strong>Contracts ✓</strong></div>
+          <div class="phase done"><span>Phase 2</span><strong>Persistence ✓</strong></div>
+          <div class="phase done"><span>Phase 3</span><strong>Runtime ✓</strong></div>
+          <div class="phase done"><span>Phase 4</span><strong>Production ✓</strong></div>
+          <div class="phase current"><span>Phase 5</span><strong>External gate</strong></div>
+          <div class="phase future"><span>Phase 6</span><strong>Pending</strong></div>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="numbers-heading">
+      <div class="shell">
+        <div class="section-head">
+          <h2 id="numbers-heading">Verified, not estimated</h2>
+          <p>Latest full runs recorded on 14 September 2026.</p>
+        </div>
+        <div class="metric-grid">
+          <div class="metric"><span class="value">1,095</span><span class="label">Local JVM and Robolectric tests</span><div class="delta">0 failures · 0 errors</div></div>
+          <div class="metric"><span class="value">3,730</span><span class="label">Tasks in the authoritative build gate</span><div class="delta">Build · lint · boundaries · dependencies</div></div>
+          <div class="metric"><span class="value">121</span><span class="label">Inspected Paparazzi baselines</span><div class="delta">Light · dark · large text · rotation</div></div>
+          <div class="metric"><span class="value">v6</span><span class="label">Current Room schema</span><div class="delta">Adjacent and oldest-to-current migrations</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="architecture" aria-labelledby="architecture-heading">
+      <div class="shell">
+        <div class="section-head">
+          <h2 id="architecture-heading">The boundary is the design</h2>
+          <p>Android objects stop at the platform edge. Everything deeper receives immutable records and returns typed results.</p>
+        </div>
+        <div class="card architecture">
+          <div class="flow">
+            <article class="layer">
+              <small>:host:platform</small>
+              <h3>Framework adapters</h3>
+              <p>LauncherApps, UserHandle, AppWidgetHost, notification services, intents, drawables, and host views live here.</p>
+            </article>
+            <div class="arrow" aria-hidden="true">→</div>
+            <article class="layer">
+              <small>:host:runtime + :host:data</small>
+              <h3>Policy and coordination</h3>
+              <p>Profile filtering, lifecycle ledgers, overlays, store transactions, composition, and cleanup decisions.</p>
+            </article>
+            <div class="arrow" aria-hidden="true">→</div>
+            <article class="layer">
+              <small>Contribution modules</small>
+              <h3>Sanitized rendering</h3>
+              <p>Stable IDs, semantic kinds, availability, work badging, indicators, and opaque widget tokens only.</p>
+            </article>
+          </div>
+          <div class="boundary">No Android callbacks, Room records, raw notification content, locked private metadata, or mutable collections cross this line.</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="capabilities" aria-labelledby="capabilities-heading">
+      <div class="shell">
+        <div class="section-head">
+          <h2 id="capabilities-heading">Phase 5 capability map</h2>
+          <p>Implementation status is separate from the remaining physical evidence gate.</p>
+        </div>
+        <div class="capability-grid">
+          <article class="card capability"><header><h3>Widget lifecycle</h3><span class="status">Ready</span></header><p>One durable ID per placement, one live view per surface, and recoverable cleanup across framework and database boundaries.</p><ul><li>Bind, configure, resize, copy, dormancy</li><li>Restart, restore, invalidation, deletion</li><li>Cancellation and rejected-commit leak checks</li></ul></article>
+          <article class="card capability"><header><h3>Shortcuts</h3><span class="status">Ready</span></header><p>Profile-aware semantic identity with distinct placement identity and complete pinned-set reconciliation.</p><ul><li>Duplicate placements survive Room reopen</li><li>Stale and locked targets fail closed</li><li>Launch resolves current profile state</li></ul></article>
+          <article class="card capability"><header><h3>Profiles + Private Space</h3><span class="status">Ready</span></header><p>Profiles are classified before metadata access. The private container is host-owned, secure, and absent when policy is unclear.</p><ul><li>API 36 visibility configuration and settings route</li><li>System authentication and asynchronous unlock</li><li>Immediate labels, icons, results, and indicator purge</li></ul></article>
+          <article class="card capability"><header><h3>Notification indicators</h3><span class="status">Ready</span></header><p>The platform reduces notifications to eligible profile/package aggregates. No notification content leaves the adapter or reaches storage.</p><ul><li>None, dot, or approximate count</li><li>Denial, revocation, disconnect, recovery</li><li>API 37 framework revocation race handled</li></ul></article>
+          <article class="card capability"><header><h3>Folders</h3><span class="status">Ready</span></header><p>Stable folders retain explicit order and durable hidden members while the open overlay filters current policy.</p><ul><li>Create, rename, reorder, delete</li><li>Keyboard, D-pad, TalkBack alternatives</li><li>Back, Home, and process recreation</li></ul></article>
+          <article class="card capability"><header><h3>Item actions</h3><span class="status">Ready</span></header><p>Every action revalidates the current item, package, profile, and policy before execution.</p><ul><li>Favorite, visibility, rename, folders</li><li>Details, uninstall, disable, shortcut removal</li><li>Typed rejection and destructive confirmation</li></ul></article>
+        </div>
+      </div>
+    </section>
+
+    <section id="evidence" aria-labelledby="evidence-heading">
+      <div class="shell">
+        <div class="section-head">
+          <h2 id="evidence-heading">Device and persistence evidence</h2>
+          <p>Authority-dependent paths stay recorded as skips. Fakes never stand in for a physical-device claim.</p>
+        </div>
+        <div class="evidence-grid">
+          <article class="card evidence-card">
+            <h3>Connected matrices</h3>
+            <div class="device-row">
+              <div class="device-name"><strong>AOSP API 35</strong><span>Required minimum</span></div>
+              <div class="bar" aria-label="49 of 50 tests passed"><span style="width:98%"></span></div>
+              <div class="score"><strong>49 / 50</strong><br>1 authority skip</div>
+            </div>
+            <div class="device-row">
+              <div class="device-name"><strong>GrapheneOS</strong><span>Pixel 10a · API 37</span></div>
+              <div class="bar" aria-label="38 of 39 tests passed"><span style="width:97.44%"></span></div>
+              <div class="score"><strong>38 / 39</strong><br>1 authority skip</div>
+            </div>
+            <div class="device-row">
+              <div class="device-name"><strong>Production app</strong><span>Final Graphene rerun</span></div>
+              <div class="bar" aria-label="16 of 16 tests passed"><span style="width:100%"></span></div>
+              <div class="score"><strong>16 / 16</strong><br>all passed</div>
+            </div>
+            <div class="device-row">
+              <div class="device-name"><strong>Private auth</strong><span>Human-assisted flow</span></div>
+              <div class="bar" aria-label="Private authentication test passed"><span style="width:100%"></span></div>
+              <div class="score"><strong>1 / 1</strong><br>passed</div>
+            </div>
+          </article>
+
+          <article class="card evidence-card">
+            <h3>Room migration chain</h3>
+            <p style="color:var(--muted);margin:0">Schema 6 preserves widget states, duplicate shortcuts, folder order, app visibility, notification preferences, unrelated fields, and opaque documents.</p>
+            <div class="schema-line" aria-label="Room schemas one through six verified">
+              <div class="schema-node"><b>1</b><span>oldest</span></div>
+              <div class="schema-node"><b>2</b><span>adjacent</span></div>
+              <div class="schema-node"><b>3</b><span>adjacent</span></div>
+              <div class="schema-node"><b>4</b><span>adjacent</span></div>
+              <div class="schema-node"><b>5</b><span>adjacent</span></div>
+              <div class="schema-node"><b>6</b><span>current</span></div>
+            </div>
+            <div class="boundary" style="margin-top:28px">Close + reopen ✓ &nbsp; Injected rollback ✓ &nbsp; Byte preservation ✓</div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="blocker" aria-labelledby="blocker-heading">
+      <div class="shell">
+        <article class="card blocker">
+          <div class="blocker-line" aria-hidden="true"></div>
+          <div>
+            <h2 id="blocker-heading">One device prerequisite is still missing</h2>
+            <p>The reference phone has no managed-work profile. Discovery, mandatory badging, cross-profile launch, pause, resume, quiet-state removal, and callback restoration still need a compliant GrapheneOS device. The notification restricted-settings grant must also be repeated through the intended distribution installer.</p>
+          </div>
+          <a href="phase-5-blocker-and-review-prompt.md">Open handoff ↗</a>
+        </article>
+      </div>
+    </section>
+
+    <section aria-labelledby="commands-heading">
+      <div class="shell">
+        <div class="section-head">
+          <h2 id="commands-heading">Reproducible gates</h2>
+          <p>The status documents retain device fingerprints, restoration steps, durations, and complete results.</p>
+        </div>
+        <div class="command-list">
+          <details><summary>Authoritative build · 7m47s · passed</summary><pre>./gradlew build checkModuleBoundaries verifyNoGoogleDependencies buildHealth \
+  --no-daemon --no-configuration-cache --console=plain</pre></details>
+          <details><summary>Paparazzi · 2m58s · passed</summary><pre>./gradlew :app:verifyPaparazziStableDebug \
+  :modules:block:core:verifyPaparazziDebug \
+  :modules:layout:core:verifyPaparazziDebug \
+  :host:editor:verifyPaparazziDebug \
+  :host:runtime:verifyPaparazziDebug \
+  :host:settings:verifyPaparazziDebug \
+  --no-daemon --no-configuration-cache --console=plain</pre></details>
+          <details><summary>Connected matrix · API 35 and GrapheneOS</summary><pre>./gradlew :host:data:connectedDebugAndroidTest \
+  :host:platform:connectedDebugAndroidTest \
+  :host:runtime:connectedDebugAndroidTest \
+  :host:editor:connectedDebugAndroidTest \
+  :app:connectedStableDebugAndroidTest \
+  --no-daemon --no-configuration-cache --console=plain</pre></details>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="shell">
+      <span>Quicklauncher current state · 14 September 2026</span>
+      <span><a href="current-state.md">Status</a> · <a href="phase-5-device-evidence.md">Device evidence</a> · <a href="phase-5-blocker-and-review-prompt.md">Review prompt</a></span>
+    </div>
+  </footer>
+</body>
+</html>

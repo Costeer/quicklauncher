@@ -236,6 +236,68 @@ class LauncherRuntimeTest {
     }
 
     @Test
+    fun `live renderer failure publishes the committed revision and safe home surface`() = runTest {
+        val store: LauncherStore = InMemoryLauncherStore()
+        SafeLayoutProvisioner(store).ensureAvailable()
+        val before = store.read()
+        val instanceId = ModuleInstanceId.parse("org.quicklauncher.test/live-failing-layout")
+        val configurationId = ConfigurationDocumentId.parse("org.quicklauncher.test/live-failing-config")
+        val contributionId = ContributionId.parse("org.quicklauncher.test/live-failing-layout")
+        require(
+            store.commit(
+                LauncherTransaction(
+                    before.revision,
+                    listOf(
+                        LauncherEdit.RetainLayout(
+                            DestinationLayoutRecord(
+                                SafeLayoutIds.START_DESTINATION,
+                                contributionId,
+                                instanceId,
+                                selected = false,
+                            ),
+                            ModuleInstanceRecord(instanceId, contributionId, configurationId),
+                            StoredConfigurationDocument(
+                                configurationId,
+                                ConfigurationDocument(
+                                    ConfigTypeId.parse("org.quicklauncher.test/live-failing-config"),
+                                    SchemaVersion.of(1),
+                                    EncodedConfiguration.of("{}"),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ) is CommitResult.Committed,
+        )
+        val retained = store.read()
+        require(
+            store.commit(
+                LauncherTransaction(
+                    retained.revision,
+                    listOf(LauncherEdit.SelectLayout(SafeLayoutIds.START_DESTINATION, instanceId)),
+                ),
+            ) is CommitResult.Committed,
+        )
+        assertEquals(
+            instanceId,
+            store.read().destinationLayouts.single { it.selected }.layoutInstanceId,
+        )
+        val runtime = runtime(
+            catalog = FakeCatalog(),
+            role = FakeHomeRoleGateway(),
+            store = store,
+            selectedLayoutRestorer = SelectedLayoutRestorer {},
+        )
+        val publishedBeforeFailure = runtime.state.value.storeRevision
+
+        assertEquals(null, runtime.reportRendererFailure(instanceId, IllegalStateException("failed")))
+
+        assertTrue(runtime.state.value.storeRevision.value > publishedBeforeFailure.value)
+        assertEquals(LauncherSurface.SAFE_LAYOUT, runtime.state.value.surface)
+        runtime.close()
+    }
+
+    @Test
     fun `store failure keeps app launching and Settings usable across Home and resume`() = runTest {
         val runtime = runtime(
             catalog = FakeCatalog(),
@@ -318,9 +380,9 @@ class LauncherRuntimeTest {
     }
 
     @Test
-    fun `matching query never returns an app hidden from ordinary collections`() = runTest {
+    fun `matching query does not return an app hidden from search`() = runTest {
         val runtime = runtime(
-            catalog = FakeCatalog(alphaCollectionVisible = false),
+            catalog = FakeCatalog(alphaCollectionVisible = false, alphaSearchVisible = false),
             role = FakeHomeRoleGateway(),
         )
         runtime.start(LauncherEntry.HOME)
@@ -329,6 +391,22 @@ class LauncherRuntimeTest {
 
         assertTrue(runtime.state.value.visibleApps.isEmpty())
         assertEquals(listOf("Alpha", "Zeta"), runtime.state.value.settingsApps.map { it.label })
+        runtime.close()
+    }
+
+    @Test
+    fun `matching query reveals a collection-hidden app when search recovery is allowed`() = runTest {
+        val runtime = runtime(
+            catalog = FakeCatalog(alphaCollectionVisible = false, alphaSearchVisible = true),
+            role = FakeHomeRoleGateway(),
+        )
+        runtime.start(LauncherEntry.HOME)
+
+        assertEquals(listOf("Zeta"), runtime.state.value.visibleApps.map { it.label })
+        runtime.setLocalQuery("alpha")
+
+        assertEquals(listOf("Alpha"), runtime.state.value.visibleApps.map { it.label })
+        assertTrue(runtime.state.value.visibleApps.single().collectionVisible.not())
         runtime.close()
     }
 
@@ -366,6 +444,7 @@ class LauncherRuntimeTest {
 
     private class FakeCatalog(
         private val alphaCollectionVisible: Boolean = true,
+        private val alphaSearchVisible: Boolean = true,
     ) : AppCatalog {
         private val personal = ProfileSerial.of(0)
         private val mutableState = MutableStateFlow(AppCatalogSnapshot.Loading)
@@ -389,6 +468,7 @@ class LauncherRuntimeTest {
                                 "org.example.alpha",
                                 "Alpha",
                                 collectionVisible = alphaCollectionVisible,
+                                searchVisible = alphaSearchVisible,
                             ),
                         ),
                     ),
@@ -407,6 +487,7 @@ class LauncherRuntimeTest {
             packageName: String,
             label: String,
             collectionVisible: Boolean = true,
+            searchVisible: Boolean = true,
         ): CatalogApp = CatalogApp(
             identity = AppActivityIdentity(
                 personal,
@@ -417,6 +498,7 @@ class LauncherRuntimeTest {
             icon = AppIcon.of(byteArrayOf(1)),
             favorite = false,
             collectionVisible = collectionVisible,
+            searchVisible = searchVisible,
         )
     }
 

@@ -599,6 +599,8 @@ abstract class LauncherCommandContributionContractSuite<C : Any> : CommonContrib
             assertImmutableMap(fixture.input.parameters.values)
             fixture.input.parameters.values.values.filterIsInstance<SettingValue.AppSelectionValue>()
                 .forEach { assertImmutableList(it.values) }
+            fixture.input.parameters.values.values.filterIsInstance<SettingValue.ContentSelectionValue>()
+                .forEach { assertImmutableList(it.values) }
             assertEquals(fixture.expectedResult, contract.target.execute(fixture.input))
         }
         val results = contract.fixtures.map { it.expectedResult }

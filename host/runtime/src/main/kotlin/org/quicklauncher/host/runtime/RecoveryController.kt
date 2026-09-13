@@ -102,6 +102,86 @@ class RecoveryController(
         }
     }
 
+    /** Records an in-process renderer failure against the instance that actually threw. */
+    suspend fun reportRendererFailure(
+        instanceId: ModuleInstanceId,
+        failure: RuntimeException,
+    ): StoreRejection? {
+        val snapshot = store.read()
+        val instance = snapshot.moduleInstances.singleOrNull { it.id == instanceId }
+            ?: return StoreRejection(
+                StoreRejectionCode.RECOVERY_STATE_MISMATCH,
+                "Renderer recovery requires a known module instance",
+            )
+        if (instance.contributionId == SafeLayoutIds.CONTRIBUTION) {
+            return StoreRejection(
+                StoreRejectionCode.RECOVERY_STATE_MISMATCH,
+                "The host-owned safe layout cannot be quarantined",
+            )
+        }
+        val existingQuarantine = instance.status as? org.quicklauncher.host.data.store.ModuleInstanceStatus.Quarantined
+        if (existingQuarantine?.origin == org.quicklauncher.host.data.store.ModuleQuarantineOrigin.RENDERER) {
+            return null
+        }
+        val selectedRoot = snapshot.destinationLayouts.any {
+            it.layoutInstanceId == instanceId && it.selected
+        }
+        if (selectedRoot) {
+            return when (
+                val result = quarantine(
+                    instanceId = instanceId,
+                    failure = failure,
+                    code = RENDERER_FAILURE_CODE,
+                    outcome = RENDERER_FAILURE_OUTCOME,
+                )
+            ) {
+                RendererRestoreResult.Restored -> null
+                is RendererRestoreResult.SafeFallback -> null
+                is RendererRestoreResult.Rejected -> result.rejection
+            }
+        }
+        val unresolved = snapshot.crashMarkers.singleOrNull {
+            it.moduleInstanceId == instanceId && it.outcome == null
+        }
+        val now = clock.nowEpochMillis()
+        val edits = buildList {
+            if (unresolved == null) {
+                add(
+                    LauncherEdit.BeginStartupRestore(
+                        CrashMarkerRecord(
+                            id = markerId(instanceId),
+                            moduleInstanceId = instanceId,
+                            appVersion = appVersion,
+                            startupAttempt = 1,
+                            timestampEpochMillis = now,
+                            outcome = null,
+                        ),
+                    ),
+                )
+            }
+            add(
+                LauncherEdit.QuarantineRenderer(
+                    moduleInstanceId = instanceId,
+                    code = RENDERER_FAILURE_CODE,
+                    message = "Contribution renderer failed",
+                    outcome = RENDERER_FAILURE_OUTCOME,
+                ),
+            )
+        }
+        val committed = commit(
+            snapshot,
+            edits,
+        )
+        return when (committed) {
+            is CommitAttempt.Rejected -> committed.rejection
+            is CommitAttempt.Committed -> {
+                safeDiagnostic(rendererFailureEvent(instanceId, failure))
+                safeDiagnostic(DiagnosticEvent(DiagnosticEventCode.INSTANCE_QUARANTINED, instanceId))
+                null
+            }
+        }
+    }
+
     private suspend fun quarantine(
         instanceId: ModuleInstanceId,
         failure: RuntimeException?,
@@ -126,15 +206,35 @@ class RecoveryController(
                 "Renderer recovery requires the retained safe layout",
             ),
         )
-        val edits = listOf(
-            LauncherEdit.QuarantineRenderer(
+        val unresolved = snapshot.crashMarkers.singleOrNull {
+            it.moduleInstanceId == instanceId && it.outcome == null
+        }
+        val edits = buildList {
+            if (unresolved == null) {
+                val previous = snapshot.crashMarkers.singleOrNull { it.moduleInstanceId == instanceId }
+                val now = clock.nowEpochMillis()
+                add(
+                    LauncherEdit.BeginStartupRestore(
+                        CrashMarkerRecord(
+                            id = previous?.id ?: markerId(instanceId),
+                            moduleInstanceId = instanceId,
+                            appVersion = appVersion,
+                            startupAttempt = (previous?.startupAttempt ?: 0) + 1,
+                            timestampEpochMillis = now,
+                            outcome = null,
+                            firstObservedAtEpochMillis = previous?.firstObservedAtEpochMillis ?: now,
+                        ),
+                    ),
+                )
+            }
+            add(LauncherEdit.QuarantineRenderer(
                 moduleInstanceId = instanceId,
                 code = code,
                 message = "Renderer failed during startup restoration",
                 outcome = outcome,
-            ),
-            LauncherEdit.SelectLayout(selected.destinationId, safe.layoutInstanceId),
-        )
+            ))
+            add(LauncherEdit.SelectLayout(selected.destinationId, safe.layoutInstanceId))
+        }
         return when (val committed = commit(snapshot, edits)) {
             is CommitAttempt.Rejected -> RendererRestoreResult.Rejected(committed.rejection)
             is CommitAttempt.Committed -> {

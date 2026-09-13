@@ -14,7 +14,9 @@ import org.quicklauncher.contracts.domain.ContributionId
 import org.quicklauncher.contracts.domain.CrashMarkerId
 import org.quicklauncher.contracts.domain.DestinationId
 import org.quicklauncher.contracts.domain.ModuleInstanceId
+import org.quicklauncher.contracts.domain.PlacementId
 import org.quicklauncher.contracts.domain.SchemaVersion
+import org.quicklauncher.contracts.domain.StableKey
 import org.quicklauncher.host.data.spatial.DestinationCoordinate
 import org.quicklauncher.host.data.store.CommitResult
 import org.quicklauncher.host.data.store.CrashMarkerRecord
@@ -28,6 +30,9 @@ import org.quicklauncher.host.data.store.LauncherTransaction
 import org.quicklauncher.host.data.store.ModuleInstanceRecord
 import org.quicklauncher.host.data.store.ModuleInstanceStatus
 import org.quicklauncher.host.data.store.ModuleQuarantineOrigin
+import org.quicklauncher.host.data.store.NewPlacedModule
+import org.quicklauncher.host.data.store.PlacementRecord
+import org.quicklauncher.host.data.store.PlacementPolicy
 import org.quicklauncher.host.data.store.StoredConfigurationDocument
 import org.quicklauncher.host.runtime.diagnostics.BoundedDiagnosticLog
 import org.quicklauncher.host.runtime.diagnostics.DiagnosticEventCode
@@ -35,6 +40,70 @@ import org.quicklauncher.host.runtime.diagnostics.DiagnosticRecord
 import org.quicklauncher.host.runtime.diagnostics.DiagnosticStorage
 
 class RecoveryControllerTest {
+    @Test
+    fun `throwing child renderer quarantines only that child and keeps the selected layout`() = runTest {
+        val store = unsafeStore()
+        SafeLayoutProvisioner(store).ensureAvailable()
+        val before = store.read()
+        val selected = before.destinationLayouts.single { it.selected }
+        val childId = ModuleInstanceId.parse("org.quicklauncher.instance/crashing-child")
+        val childConfigurationId = ConfigurationDocumentId.parse(
+            "org.quicklauncher.configuration/crashing-child",
+        )
+        store.commit(
+            LauncherTransaction(
+                before.revision,
+                listOf(
+                    LauncherEdit.CommitDrop(
+                        NewPlacedModule(
+                            ModuleInstanceRecord(
+                                childId,
+                                ContributionId.parse("org.quicklauncher.block/crashing-child"),
+                                childConfigurationId,
+                            ),
+                            StoredConfigurationDocument(
+                                childConfigurationId,
+                                ConfigurationDocument(
+                                    ConfigTypeId.parse("org.quicklauncher.config/crashing-child"),
+                                    SchemaVersion.of(1),
+                                    EncodedConfiguration.of("{}"),
+                                ),
+                            ),
+                            PlacementRecord(
+                                PlacementId.parse("org.quicklauncher.placement/crashing-child"),
+                                selected.layoutInstanceId,
+                                selected.layoutInstanceId,
+                                StableKey.parse("content"),
+                                childId,
+                                0,
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        ) as CommitResult.Committed
+        val storage = MemoryDiagnosticStorage()
+        val controller = RecoveryController(
+            store,
+            BoundedDiagnosticLog(storage, { 1_000L }),
+            "phase4-test",
+            clock = { 1_000L },
+        )
+
+        assertEquals(
+            null,
+            controller.reportRendererFailure(childId, IllegalStateException("child failed")),
+        )
+
+        val recovered = store.read()
+        assertEquals(selected.layoutInstanceId, recovered.destinationLayouts.single { it.selected }.layoutInstanceId)
+        assertEquals(ModuleInstanceStatus.Active, recovered.moduleInstances.single { it.id == selected.layoutInstanceId }.status)
+        val childStatus = recovered.moduleInstances.single { it.id == childId }.status
+            as ModuleInstanceStatus.Quarantined
+        assertEquals(ModuleQuarantineOrigin.RENDERER, childStatus.origin)
+        assertTrue(storage.records.any { it.code == DiagnosticEventCode.RENDERER_FAILED })
+    }
+
     @Test
     fun `throwing selected renderer is quarantined without changing its configuration`() = runTest {
         val store = unsafeStore()
@@ -159,7 +228,7 @@ class RecoveryControllerTest {
     }
 
     private suspend fun unsafeStore(): LauncherStore {
-        val store: LauncherStore = InMemoryLauncherStore()
+        val store: LauncherStore = InMemoryLauncherStore(placementPolicy = PlacementPolicy { null })
         val destinationId = DestinationId.parse("org.quicklauncher.destination/start")
         val contributionId = ContributionId.parse("org.quicklauncher.layout/crashing")
         val instanceId = ModuleInstanceId.parse("org.quicklauncher.instance/crashing")

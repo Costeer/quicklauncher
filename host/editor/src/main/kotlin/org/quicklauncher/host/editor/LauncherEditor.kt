@@ -1,6 +1,7 @@
 package org.quicklauncher.host.editor
 
 import java.util.Collections
+import java.util.LinkedHashSet
 import java.util.concurrent.CancellationException
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.UUID
@@ -16,6 +17,8 @@ import kotlinx.coroutines.sync.withLock
 import org.quicklauncher.contracts.contribution.ConfigurationCodec
 import org.quicklauncher.contracts.contribution.ConfigurationDocument
 import org.quicklauncher.contracts.contribution.ContributionRegistry
+import org.quicklauncher.contracts.contribution.RegisteredBlock
+import org.quicklauncher.contracts.contribution.RegisteredLayout
 import org.quicklauncher.contracts.contribution.find
 import org.quicklauncher.contracts.domain.ContributionId
 import org.quicklauncher.contracts.domain.DestinationId
@@ -66,7 +69,49 @@ data class EditorModule(
     val selectedLayout: Boolean,
     val placedBlock: Boolean,
     val quarantined: Boolean,
+    val configuration: ConfigurationDocument,
+    val placement: EditorPlacement? = null,
 )
+
+data class EditorPlacement(
+    val layoutInstanceId: ModuleInstanceId,
+    val parentInstanceId: ModuleInstanceId,
+    val parentSlotId: StableKey,
+    val index: Int,
+    val encoded: String,
+    val schemaVersion: Int,
+    val siblingCount: Int = 1,
+)
+
+data class EditorContributionOption(
+    val id: ContributionId,
+    val name: String,
+    val defaultConfiguration: ConfigurationDocument,
+)
+
+class EditorDropTarget(
+    val layoutInstanceId: ModuleInstanceId,
+    val parentInstanceId: ModuleInstanceId,
+    val parentSlotId: StableKey,
+    val nextIndex: Int,
+    acceptedBlocks: Collection<ContributionId>,
+    val remainingCapacity: Int,
+) {
+    val acceptedBlocks: Set<ContributionId> =
+        Collections.unmodifiableSet(LinkedHashSet(acceptedBlocks))
+}
+
+@JvmInline
+value class EditorEncodedPlacement private constructor(val value: String) {
+    companion object {
+        fun of(value: String): EditorEncodedPlacement {
+            require(value.isNotBlank()) { "Encoded placement must not be blank" }
+            return EditorEncodedPlacement(value)
+        }
+    }
+
+    internal fun stored(): EncodedPlacementData = EncodedPlacementData.of(value)
+}
 
 class LauncherEditorState(
     val screen: EditorScreen,
@@ -75,10 +120,19 @@ class LauncherEditorState(
     destinations: Collection<EditorDestination>,
     modules: Collection<EditorModule>,
     val rejection: StoreRejection?,
+    layoutOptions: Collection<EditorContributionOption> = emptyList(),
+    blockOptions: Collection<EditorContributionOption> = emptyList(),
+    dropTargets: Collection<EditorDropTarget> = emptyList(),
+    val pendingConfirmation: EditorConfirmation? = null,
 ) {
     val destinations: List<EditorDestination> =
         Collections.unmodifiableList(ArrayList(destinations))
     val modules: List<EditorModule> = Collections.unmodifiableList(ArrayList(modules))
+    val layoutOptions: List<EditorContributionOption> =
+        Collections.unmodifiableList(ArrayList(layoutOptions))
+    val blockOptions: List<EditorContributionOption> =
+        Collections.unmodifiableList(ArrayList(blockOptions))
+    val dropTargets: List<EditorDropTarget> = Collections.unmodifiableList(ArrayList(dropTargets))
 
     companion object {
         val Closed = LauncherEditorState(
@@ -90,6 +144,12 @@ class LauncherEditorState(
             rejection = null,
         )
     }
+}
+
+sealed interface EditorConfirmation {
+    data class DeleteDestination(val destinationId: DestinationId) : EditorConfirmation
+    data class RemovePlacedModule(val instanceId: ModuleInstanceId) : EditorConfirmation
+    data class RemoveQuarantinedModule(val instanceId: ModuleInstanceId) : EditorConfirmation
 }
 
 sealed interface EditorAction {
@@ -121,7 +181,7 @@ sealed interface EditorAction {
         val contributionId: ContributionId,
         val configuration: ConfigurationDocument,
         val index: Int,
-        val placement: EncodedPlacementData = EncodedPlacementData.of("{}"),
+        val placement: EditorEncodedPlacement = EditorEncodedPlacement.of("{}"),
         val placementSchemaVersion: Int = 1,
     ) : EditorAction
     data class MoveBlock(
@@ -129,7 +189,7 @@ sealed interface EditorAction {
         val parentInstanceId: ModuleInstanceId,
         val parentSlotId: StableKey,
         val index: Int,
-        val placement: EncodedPlacementData = EncodedPlacementData.of("{}"),
+        val placement: EditorEncodedPlacement = EditorEncodedPlacement.of("{}"),
         val placementSchemaVersion: Int = 1,
     ) : EditorAction
     data class CopyBlock(
@@ -137,7 +197,7 @@ sealed interface EditorAction {
         val parentInstanceId: ModuleInstanceId,
         val parentSlotId: StableKey,
         val index: Int,
-        val placement: EncodedPlacementData = EncodedPlacementData.of("{}"),
+        val placement: EditorEncodedPlacement = EditorEncodedPlacement.of("{}"),
         val placementSchemaVersion: Int = 1,
     ) : EditorAction
     data class ReplaceConfiguration(
@@ -175,7 +235,7 @@ fun registryEditorConfigurationDefaults(registry: ContributionRegistry): EditorC
     }
 
 @Suppress("UNCHECKED_CAST")
-private fun defaultDocument(codec: ConfigurationCodec<*>): ConfigurationDocument {
+internal fun defaultDocument(codec: ConfigurationCodec<*>): ConfigurationDocument {
     val typed = codec as ConfigurationCodec<Any>
     return ConfigurationDocument(typed.configType, typed.currentSchemaVersion, typed.encode(typed.default))
 }
@@ -191,8 +251,11 @@ fun interface EditorIdentitySource {
 }
 
 private val RandomEditorIdentitySource = EditorIdentitySource {
-    UUID.randomUUID().toString().lowercase()
+    randomEditorLocalId()
 }
+
+internal fun randomEditorLocalId(): String =
+    "id-${UUID.randomUUID().toString().lowercase()}"
 
 private val UnavailableDestinationFactory = EditorDestinationFactory { _, _, _, _ -> null }
 
@@ -202,6 +265,7 @@ class DefaultLauncherEditor(
     private val configurationDefaults: EditorConfigurationDefaults = UnavailableConfigurationDefaults,
     private val destinationFactory: EditorDestinationFactory = UnavailableDestinationFactory,
     private val identities: EditorIdentitySource = RandomEditorIdentitySource,
+    private val contributionRegistry: ContributionRegistry? = null,
 ) : LauncherEditor {
     private val closed = AtomicBoolean(false)
     private val mutex = Mutex()
@@ -251,6 +315,8 @@ class DefaultLauncherEditor(
                 is EditorAction.SetStart -> commit(LauncherEdit.SetStartDestination(action.destinationId))
                 is EditorAction.Delete -> commit(
                     LauncherEdit.DeleteDestination(action.destinationId, action.confirmed),
+                    EditorConfirmation.DeleteDestination(action.destinationId),
+                    action.confirmed,
                 )
                 is EditorAction.RetainLayout -> retainLayout(action)
                 is EditorAction.SelectLayout -> commit(
@@ -272,7 +338,19 @@ class DefaultLauncherEditor(
         scope.cancel()
     }
 
-    private suspend fun commit(edit: LauncherEdit): EditorResult {
+    private suspend fun commit(
+        edit: LauncherEdit,
+        confirmation: EditorConfirmation? = null,
+        confirmed: Boolean = false,
+    ): EditorResult {
+        if (confirmed && mutableState.value.pendingConfirmation != confirmation) {
+            return reject(
+                StoreRejection(
+                    org.quicklauncher.host.data.store.StoreRejectionCode.CONFIRMATION_REQUIRED,
+                    "Confirmation does not match the requested destructive change",
+                ),
+            )
+        }
         val before = store.read()
         return try {
             when (val result = store.commit(LauncherTransaction(before.revision, listOf(edit)))) {
@@ -287,7 +365,13 @@ class DefaultLauncherEditor(
                     )
                     EditorResult.Applied
                 }
-                is CommitResult.Rejected -> reject(result.reason)
+                is CommitResult.Rejected -> reject(
+                    result.reason,
+                    confirmation.takeIf {
+                        result.reason.code ==
+                            org.quicklauncher.host.data.store.StoreRejectionCode.CONFIRMATION_REQUIRED
+                    },
+                )
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -341,7 +425,7 @@ class DefaultLauncherEditor(
                         action.parentSlotId,
                         instanceId,
                         action.index,
-                        action.placement,
+                        action.placement.stored(),
                         action.placementSchemaVersion,
                     ),
                 ),
@@ -359,7 +443,7 @@ class DefaultLauncherEditor(
                 action.parentInstanceId,
                 action.parentSlotId,
                 action.index,
-                action.placement,
+                action.placement.stored(),
                 action.placementSchemaVersion,
             ),
         )
@@ -384,7 +468,7 @@ class DefaultLauncherEditor(
                 moduleId(),
                 configurationId(),
                 placementId(),
-                if (sourcePlacement.id == root.id) action.placement else sourcePlacement.data,
+                if (sourcePlacement.id == root.id) action.placement.stored() else sourcePlacement.data,
                 if (sourcePlacement.id == root.id) {
                     action.placementSchemaVersion
                 } else {
@@ -439,7 +523,11 @@ class DefaultLauncherEditor(
                     "Only a placed block subtree can be removed; '$instanceId' is not placed",
                 ),
             )
-        return commit(LauncherEdit.RemovePlacedSubtree(placement.id, confirmed))
+        return commit(
+            LauncherEdit.RemovePlacedSubtree(placement.id, confirmed),
+            EditorConfirmation.RemovePlacedModule(instanceId),
+            confirmed,
+        )
     }
 
     private suspend fun removeQuarantined(action: EditorAction.RemoveQuarantinedModule): EditorResult {
@@ -451,11 +539,19 @@ class DefaultLauncherEditor(
         }
         val placement = snapshot.placements.singleOrNull { it.childInstanceId == action.instanceId }
         if (placement != null) {
-            return commit(LauncherEdit.RemovePlacedSubtree(placement.id, action.confirmed))
+            return commit(
+                LauncherEdit.RemovePlacedSubtree(placement.id, action.confirmed),
+                EditorConfirmation.RemoveQuarantinedModule(action.instanceId),
+                action.confirmed,
+            )
         }
         val retained = snapshot.destinationLayouts.singleOrNull { it.layoutInstanceId == action.instanceId }
             ?: return reject(invalid("Quarantined module '${action.instanceId}' is not removable"))
-        return commit(LauncherEdit.RemoveRetainedLayout(retained.layoutInstanceId, action.confirmed))
+        return commit(
+            LauncherEdit.RemoveRetainedLayout(retained.layoutInstanceId, action.confirmed),
+            EditorConfirmation.RemoveQuarantinedModule(action.instanceId),
+            action.confirmed,
+        )
     }
 
     private suspend fun publish(
@@ -485,10 +581,17 @@ class DefaultLauncherEditor(
             },
             modules = modulesFor(snapshot, selected),
             rejection = rejection,
+            layoutOptions = contributionOptions<RegisteredLayout<*>>(),
+            blockOptions = contributionOptions<RegisteredBlock<*>>(),
+            dropTargets = dropTargets(snapshot, selected),
+            pendingConfirmation = null,
         )
     }
 
-    private fun reject(reason: StoreRejection): EditorResult.Rejected {
+    private fun reject(
+        reason: StoreRejection,
+        pendingConfirmation: EditorConfirmation? = mutableState.value.pendingConfirmation,
+    ): EditorResult.Rejected {
         val current = mutableState.value
         mutableState.value = LauncherEditorState(
             current.screen,
@@ -497,6 +600,10 @@ class DefaultLauncherEditor(
             current.destinations,
             current.modules,
             reason,
+            current.layoutOptions,
+            current.blockOptions,
+            current.dropTargets,
+            pendingConfirmation,
         )
         return EditorResult.Rejected(reason)
     }
@@ -553,7 +660,76 @@ class DefaultLauncherEditor(
                     selectedLayout = instance.id == selectedRoot,
                     placedBlock = instance.id in placed,
                     quarantined = instance.status is org.quicklauncher.host.data.store.ModuleInstanceStatus.Quarantined,
+                    configuration = snapshot.configurationDocuments.single {
+                        it.id == instance.configurationDocumentId
+                    }.document,
+                    placement = snapshot.placements.singleOrNull { it.childInstanceId == instance.id }?.let {
+                        EditorPlacement(
+                            it.layoutInstanceId,
+                            it.parentInstanceId,
+                            it.parentSlotId,
+                            it.index,
+                            it.data.value,
+                            it.placementSchemaVersion,
+                            snapshot.placements.count { sibling ->
+                                sibling.parentInstanceId == it.parentInstanceId &&
+                                    sibling.parentSlotId == it.parentSlotId
+                            },
+                        )
+                    },
                 )
             }
+    }
+
+    private inline fun <reified T : org.quicklauncher.contracts.contribution.RegisteredContribution<*>>
+        contributionOptions(): List<EditorContributionOption> = contributionRegistry?.entries
+        .orEmpty()
+        .filterIsInstance<T>()
+        .sortedBy { it.descriptor.metadata.id.value }
+        .map { entry ->
+            EditorContributionOption(
+                entry.descriptor.metadata.id,
+                entry.descriptor.metadata.displayName.value,
+                defaultDocument(entry.codec),
+            )
+        }
+
+    private fun dropTargets(
+        snapshot: org.quicklauncher.host.data.store.LauncherSnapshot,
+        destinationId: DestinationId?,
+    ): List<EditorDropTarget> {
+        val selected = snapshot.destinationLayouts.singleOrNull {
+            it.destinationId == destinationId && it.selected
+        } ?: return emptyList()
+        val registry = contributionRegistry ?: return emptyList()
+        val root = registry.find(selected.layoutContributionId) as? RegisteredLayout<*> ?: return emptyList()
+        val result = ArrayList<EditorDropTarget>()
+        val queue = ArrayDeque<Pair<ModuleInstanceId, List<org.quicklauncher.contracts.contribution.SlotDescriptor>>>()
+        val visited = LinkedHashSet<ModuleInstanceId>()
+        queue.addLast(selected.layoutInstanceId to root.descriptor.slots)
+        while (queue.isNotEmpty()) {
+            val (parentId, slots) = queue.removeFirst()
+            if (!visited.add(parentId)) continue
+            slots.forEach { slot ->
+                val placements = snapshot.placements
+                    .filter { it.parentInstanceId == parentId && it.parentSlotId == slot.id }
+                    .sortedBy { it.index }
+                result += EditorDropTarget(
+                    selected.layoutInstanceId,
+                    parentId,
+                    slot.id,
+                    placements.size,
+                    slot.acceptedBlocks,
+                    (slot.maximumChildren - placements.size).coerceAtLeast(0),
+                )
+                placements.forEach { placement ->
+                    val child = snapshot.moduleInstances.singleOrNull { it.id == placement.childInstanceId }
+                        ?: return@forEach
+                    val block = registry.find(child.contributionId) as? RegisteredBlock<*> ?: return@forEach
+                    queue.addLast(child.id to block.descriptor.childSlots)
+                }
+            }
+        }
+        return result
     }
 }

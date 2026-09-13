@@ -3,6 +3,7 @@ package org.quicklauncher.host.runtime.composition
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.SubcomposeLayout
 import java.util.concurrent.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -18,6 +19,7 @@ import org.quicklauncher.contracts.contribution.RegisteredContribution
 import org.quicklauncher.contracts.contribution.RegisteredLayout
 import org.quicklauncher.contracts.contribution.SlotDescriptor
 import org.quicklauncher.contracts.contribution.find
+import org.quicklauncher.contracts.contribution.compatibilityProblem
 import org.quicklauncher.contracts.domain.ContributionId
 import org.quicklauncher.contracts.domain.DestinationId
 import org.quicklauncher.contracts.domain.ModuleInstanceId
@@ -96,7 +98,14 @@ class DefaultCompositionEngine(
             } else {
                 CompositionRole.NEIGHBOR_PREVIEW
             }
-            prepareDestination(request.snapshot, destination.id, role, request.environment, desiredInstances)
+            prepareDestination(
+                request.snapshot,
+                destination.id,
+                role,
+                request.environment,
+                desiredInstances,
+                request.currentInteractive,
+            )
         }
         disposeExcept(desiredInstances)
         val selected = prepared.single { it.destinationId == current.id }
@@ -114,7 +123,7 @@ class DefaultCompositionEngine(
         if (needsPreparation) {
             val request = checkNotNull(restoreRequestSource) {
                 "Selected layout '$instanceId' has not been prepared and no restore request source is installed"
-            }.request()
+            }.request(instanceId)
             val selected = request.snapshot.destinationLayouts.singleOrNull {
                 it.destinationId == request.currentDestinationId && it.selected
             }
@@ -132,6 +141,14 @@ class DefaultCompositionEngine(
     }
 
     @Synchronized
+    override fun release() {
+        if (closed) return
+        selectedLayoutId = null
+        selectedLayoutReady = false
+        disposeAll()
+    }
+
+    @Synchronized
     override fun close() {
         if (closed) return
         closed = true
@@ -146,8 +163,12 @@ class DefaultCompositionEngine(
         role: CompositionRole,
         environment: CompositionEnvironment,
         desired: MutableSet<ModuleInstanceId>,
+        currentInteractive: Boolean,
     ): PreparedDestination {
-        val composition = CompositionState(role, isInteractive = role == CompositionRole.CURRENT)
+        val composition = CompositionState(
+            role,
+            isInteractive = role == CompositionRole.CURRENT && currentInteractive,
+        )
         val layout = snapshot.destinationLayouts.singleOrNull {
             it.destinationId == destinationId && it.selected
         }
@@ -201,6 +222,12 @@ class DefaultCompositionEngine(
             ?: return placeholder(instanceId, issues.last(), environment)
         val registration = resolved.registration as RegisteredLayout<*>
         val descriptor = registration.descriptor
+        unknownSlotIssue(snapshot, instanceId, descriptor.slots)?.let { mismatch ->
+            desired -= instanceId
+            dispose(instanceId)
+            issues += mismatch
+            return placeholder(instanceId, mismatch, environment)
+        }
         val children = prepareSlots(
             snapshot,
             instanceId,
@@ -269,6 +296,12 @@ class DefaultCompositionEngine(
             ?: return placeholder(instanceId, issues.last(), environment)
         val registration = resolved.registration as RegisteredBlock<*>
         val descriptor = registration.descriptor
+        unknownSlotIssue(snapshot, instanceId, descriptor.childSlots)?.let { mismatch ->
+            desired -= instanceId
+            dispose(instanceId)
+            issues += mismatch
+            return placeholder(instanceId, mismatch, environment)
+        }
         val children = prepareSlots(
             snapshot,
             instanceId,
@@ -279,7 +312,7 @@ class DefaultCompositionEngine(
             path + instanceId,
             issues,
         )
-        val content = try {
+        val preparedContent = try {
             environment.contentSource.contentFor(instanceId)
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -298,11 +331,11 @@ class DefaultCompositionEngine(
             environment.theme,
             environment.window,
             environment.backgroundContrast,
-            RenderStatus.Ready,
+            preparedContent.status,
             environment.editorMode,
             composition,
             PlacementState(slot.id, placement.index, PlacementMode.PLACED, true, true),
-            content,
+            preparedContent.content,
             children.map { it.state },
         )
         return BlockNode(
@@ -349,6 +382,23 @@ class DefaultCompositionEngine(
             },
         )
         PreparedSlot(state, nodes)
+    }
+
+    private fun unknownSlotIssue(
+        snapshot: LauncherSnapshot,
+        parentId: ModuleInstanceId,
+        descriptors: List<SlotDescriptor>,
+    ): CompositionIssue? {
+        val declaredSlots = descriptors.mapTo(hashSetOf()) { it.id }
+        val invalid = snapshot.placements
+            .filter { it.parentInstanceId == parentId && it.parentSlotId !in declaredSlots }
+            .minByOrNull { it.id.value }
+            ?: return null
+        return issue(
+            CompositionIssueKind.INCOMPATIBLE_PLACEMENT,
+            invalid.childInstanceId,
+            "Placement '${invalid.id}' targets undeclared slot '${invalid.parentSlotId}' on '$parentId'",
+        )
     }
 
     private fun resolveInstance(
@@ -458,11 +508,7 @@ class DefaultCompositionEngine(
         val childCount = snapshot.placements.count {
             it.parentInstanceId == placement.parentInstanceId && it.parentSlotId == placement.parentSlotId
         }
-        return child.contributionId in slot.acceptedBlocks &&
-            slot.type in block.compatibleSlotTypes &&
-            block.metadata.providedCapabilities.containsAll(slot.requiredCapabilities) &&
-            slot.allowedScrollAxes.containsAll(block.occupiedScrollAxes) &&
-            childCount <= slot.maximumChildren
+        return slot.compatibilityProblem(block, childCount) == null
     }
 
     private fun <A> actionsFor(composition: CompositionState, delegate: ActionSink<A>): ActionSink<A> =
@@ -602,8 +648,18 @@ private class LayoutNode(
             )
             return
         }
-        Box(modifier) {
-            session.Render(LayoutRenderInput(instanceId, state, slots, actions))
+        IsolatedRenderer(
+            modifier = modifier,
+            issueFor = { failure ->
+                CompositionIssue(
+                    CompositionIssueKind.RENDER_FAILED,
+                    instanceId,
+                    "Rendering layout '$instanceId' failed: ${failure.javaClass.simpleName}",
+                )
+            },
+            environment = environment,
+        ) {
+            Box { session.Render(LayoutRenderInput(instanceId, state, slots, actions)) }
         }
     }
 }
@@ -629,10 +685,58 @@ private class BlockNode(
             )
             return
         }
-        Box(modifier) {
-            session.Render(
-                BlockRenderInput(instanceId, state, slots, environment.contentRenderer, actions),
-            )
+        IsolatedRenderer(
+            modifier = modifier,
+            issueFor = { failure ->
+                CompositionIssue(
+                    CompositionIssueKind.RENDER_FAILED,
+                    instanceId,
+                    "Rendering block '$instanceId' failed: ${failure.javaClass.simpleName}",
+                )
+            },
+            environment = environment,
+        ) {
+            Box {
+                session.Render(
+                    BlockRenderInput(instanceId, state, slots, environment.contentRenderer, actions),
+                )
+            }
+        }
+    }
+}
+
+private enum class IsolatedRendererSlot {
+    CONTRIBUTION,
+    PLACEHOLDER,
+}
+
+/**
+ * Runs contribution composition in a child slot table so an ordinary renderer failure cannot
+ * corrupt the host composition. Cancellation remains structural and always escapes.
+ */
+@Composable
+private fun IsolatedRenderer(
+    modifier: Modifier,
+    issueFor: (RuntimeException) -> CompositionIssue,
+    environment: CompositionEnvironment,
+    content: @Composable () -> Unit,
+) {
+    SubcomposeLayout(modifier) { constraints ->
+        val placeables = try {
+            subcompose(IsolatedRendererSlot.CONTRIBUTION, content).map { it.measure(constraints) }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: RuntimeException) {
+            val issue = issueFor(failure)
+            environment.rendererFailures.report(issue, failure)
+            subcompose(IsolatedRendererSlot.PLACEHOLDER) {
+                environment.placeholderRenderer.Render(issue, Modifier)
+            }.map { it.measure(constraints) }
+        }
+        val width = placeables.maxOfOrNull { it.width } ?: constraints.minWidth
+        val height = placeables.maxOfOrNull { it.height } ?: constraints.minHeight
+        layout(width, height) {
+            placeables.forEach { it.placeRelative(0, 0) }
         }
     }
 }

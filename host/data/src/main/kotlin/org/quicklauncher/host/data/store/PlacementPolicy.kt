@@ -4,6 +4,8 @@ import org.quicklauncher.contracts.contribution.BlockDescriptor
 import org.quicklauncher.contracts.contribution.ContributionRegistry
 import org.quicklauncher.contracts.contribution.LayoutDescriptor
 import org.quicklauncher.contracts.contribution.SlotDescriptor
+import org.quicklauncher.contracts.contribution.SlotCompatibilityProblem
+import org.quicklauncher.contracts.contribution.compatibilityProblem
 import org.quicklauncher.contracts.contribution.find
 
 data class PlacementRequest(
@@ -48,25 +50,21 @@ class RegistryPlacementPolicy(
         child: BlockDescriptor,
         request: PlacementRequest,
     ): StoreRejection? {
-        if (request.child.contributionId !in slot.acceptedBlocks) {
-            return incompatible("Parent slot does not accept '${request.child.contributionId}'")
-        }
-        if (slot.type !in child.compatibleSlotTypes) {
-            return incompatible("Child block does not accept slot type '${slot.type}'")
-        }
-        if (!child.metadata.providedCapabilities.containsAll(slot.requiredCapabilities)) {
-            return incompatible("Child block does not provide every capability required by the slot")
-        }
-        if (!slot.allowedScrollAxes.containsAll(child.occupiedScrollAxes)) {
-            return incompatible("Child block occupies a scroll axis disallowed by the slot")
-        }
-        if (request.childCountAfterDrop > slot.maximumChildren) {
-            return StoreRejection(
+        return when (slot.compatibilityProblem(child, request.childCountAfterDrop)) {
+            SlotCompatibilityProblem.BLOCK_NOT_ACCEPTED ->
+                incompatible("Parent slot does not accept '${request.child.contributionId}'")
+            SlotCompatibilityProblem.SLOT_TYPE_MISMATCH ->
+                incompatible("Child block does not accept slot type '${slot.type}'")
+            SlotCompatibilityProblem.MISSING_CAPABILITY ->
+                incompatible("Child block does not provide every capability required by the slot")
+            SlotCompatibilityProblem.SCROLL_AXIS_CONFLICT ->
+                incompatible("Child block occupies a scroll axis disallowed by the slot")
+            SlotCompatibilityProblem.CAPACITY_EXCEEDED -> StoreRejection(
                 StoreRejectionCode.SLOT_AT_CAPACITY,
                 "Parent slot accepts at most ${slot.maximumChildren} children",
             )
+            null -> null
         }
-        return null
     }
 
     private fun incompatible(message: String): StoreRejection = StoreRejection(

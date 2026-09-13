@@ -110,6 +110,7 @@ internal class RoomLauncherStore private constructor(
                     LauncherMigration2To3,
                     LauncherMigration3To4,
                     LauncherMigration4To5,
+                    LauncherMigration5To6,
                 )
                 .build()
             return RoomLauncherStore(

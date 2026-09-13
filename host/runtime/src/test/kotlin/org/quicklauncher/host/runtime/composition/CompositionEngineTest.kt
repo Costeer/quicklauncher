@@ -1,7 +1,10 @@
 package org.quicklauncher.host.runtime.composition
 
 import java.util.concurrent.CancellationException
+import androidx.compose.material3.Text
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.Job
@@ -60,6 +63,7 @@ import org.quicklauncher.contracts.ui.LayoutAction
 import org.quicklauncher.contracts.ui.BlockRenderInput
 import org.quicklauncher.contracts.ui.PerformanceHookDeclaration
 import org.quicklauncher.contracts.ui.PreviewScenario
+import org.quicklauncher.contracts.ui.RenderStatus
 import org.quicklauncher.contracts.ui.ThemeMode
 import org.quicklauncher.contracts.ui.WindowInfo
 import org.quicklauncher.contracts.ui.WindowOrientation
@@ -77,7 +81,6 @@ import org.quicklauncher.host.data.store.ModuleInstanceRecord
 import org.quicklauncher.host.data.store.NewPlacedModule
 import org.quicklauncher.host.data.store.PlacementRecord
 import org.quicklauncher.host.data.store.RegistryPlacementPolicy
-import org.quicklauncher.host.data.store.LauncherSnapshot
 import org.quicklauncher.host.data.store.StoredConfigurationDocument
 import org.quicklauncher.host.data.store.registryConfigurationResolver
 import org.robolectric.annotation.Config
@@ -224,6 +227,39 @@ class CompositionEngineTest {
     }
 
     @Test
+    fun `release disposes every live session and permits a later composition`() = runTest {
+        val layouts = RecordingLayouts()
+        val store = InMemoryLauncherStore()
+        val current = install(store, layouts, "current", 0, 0, bootstrap = true)
+        val engine = DefaultCompositionEngine(TestRegistry(listOf(layouts.registration)), backgroundScope)
+        engine.prepare(CompositionRequest(store.read(), current, testEnvironment()))
+        val first = layouts.sessions.values.single()
+        val firstJob = layouts.jobs.values.single()
+
+        engine.release()
+
+        assertTrue(first.isClosed)
+        assertFalse(firstJob.isActive)
+        engine.prepare(CompositionRequest(store.read(), current, testEnvironment()))
+        assertFalse(first === layouts.sessions.values.single())
+    }
+
+    @Test
+    fun `release after owner close is a safe late UI disposal`() = runTest {
+        val layouts = RecordingLayouts()
+        val store = InMemoryLauncherStore()
+        val current = install(store, layouts, "current", 0, 0, bootstrap = true)
+        val engine = DefaultCompositionEngine(TestRegistry(listOf(layouts.registration)), backgroundScope)
+        engine.prepare(CompositionRequest(store.read(), current, testEnvironment()))
+
+        engine.close()
+        engine.release()
+
+        assertTrue(layouts.sessions.values.all(LayoutSession::isClosed))
+        assertTrue(layouts.jobs.values.none(Job::isActive))
+    }
+
+    @Test
     fun `cancelled preparation closes every session opened by the abandoned attempt`() = runTest {
         val layouts = RecordingLayouts()
         val registry = TestRegistry(listOf(layouts.registration))
@@ -254,7 +290,7 @@ class CompositionEngineTest {
         val engine = DefaultCompositionEngine(
             registry,
             backgroundScope,
-            CompositionRestoreRequestSource {
+            CompositionRestoreRequestSource { _ ->
                 requests += 1
                 CompositionRequest(store.read(), current, testEnvironment())
             },
@@ -409,14 +445,8 @@ class CompositionEngineTest {
             SchemaVersion.of(2),
             EncodedConfiguration.of("future-byte-exact"),
         )
-        val corrupt = LauncherSnapshot(
-            revision = valid.revision,
-            startDestinationId = valid.startDestinationId,
-            destinations = valid.destinations,
-            destinationLayouts = valid.destinationLayouts,
-            moduleInstances = valid.moduleInstances,
+        val corrupt = valid.withRestoredComposition(
             configurationDocuments = valid.configurationDocuments.map { it.copy(document = future) },
-            placements = valid.placements,
         )
 
         val prepared = engine.prepare(CompositionRequest(corrupt, current, testEnvironment()))
@@ -451,7 +481,11 @@ class CompositionEngineTest {
         )
         val environment = testEnvironment().copy(
             contentSource = PreparedContentSource { instanceId ->
-                if (instanceId == blockId) content else org.quicklauncher.contracts.ui.PreparedHostContent.Empty
+                if (instanceId == blockId) {
+                    PreparedBlockContent.ready(content)
+                } else {
+                    PreparedBlockContent.Empty
+                }
             },
         )
 
@@ -462,6 +496,33 @@ class CompositionEngineTest {
         assertTrue(prepared.current.issues.isEmpty())
         assertEquals(listOf(blockId), visual.openedBlocks)
         assertEquals(TestConfig("block"), visual.blockConfigurations.single())
+    }
+
+    @Test
+    fun `host prepared render status reaches the block unchanged`() = runTest {
+        val visual = VisualRegistrations()
+        val registry = TestRegistry(listOf(visual.layout, visual.block))
+        val store = InMemoryLauncherStore(
+            configurationResolver = registryConfigurationResolver(registry),
+            placementPolicy = RegistryPlacementPolicy(registry),
+        )
+        val current = installVisualTree(store, visual)
+        val prepared = DefaultCompositionEngine(registry, backgroundScope).prepare(
+            CompositionRequest(
+                store.read(),
+                current,
+                testEnvironment().copy(
+                    contentSource = PreparedContentSource {
+                        PreparedBlockContent(RenderStatus.Loading, org.quicklauncher.contracts.ui.PreparedHostContent.Empty)
+                    },
+                ),
+            ),
+        )
+
+        compose.setContent { prepared.current.Render() }
+        compose.waitForIdle()
+
+        assertEquals(listOf(RenderStatus.Loading), visual.renderStatuses.values.toList())
     }
 
     @Test
@@ -507,6 +568,45 @@ class CompositionEngineTest {
     }
 
     @Test
+    fun `placement in a removed slot invalidates the parent and disposes its live tree`() = runTest {
+        val visual = VisualRegistrations()
+        val registry = TestRegistry(listOf(visual.layout, visual.block))
+        val store = InMemoryLauncherStore(
+            configurationResolver = registryConfigurationResolver(registry),
+            placementPolicy = RegistryPlacementPolicy(registry),
+        )
+        val current = installVisualTree(store, visual)
+        val engine = DefaultCompositionEngine(registry, backgroundScope)
+        engine.prepare(CompositionRequest(store.read(), current, testEnvironment()))
+        val valid = store.read()
+        val corrupt = valid.withRestoredComposition(
+            placements = valid.placements.map {
+                it.copy(parentSlotId = StableKey.parse("removed-slot"))
+            },
+        )
+
+        val prepared = engine.prepare(
+            CompositionRequest(
+                corrupt,
+                current,
+                testEnvironment().copy(
+                    placeholderRenderer = CompositionPlaceholderRenderer { _, _ ->
+                        Text("Invalid placement placeholder")
+                    },
+                ),
+            ),
+        )
+        compose.setContent { prepared.current.Render() }
+        compose.waitForIdle()
+
+        assertEquals(CompositionIssueKind.INCOMPATIBLE_PLACEMENT, prepared.current.issues.single().kind)
+        compose.onNodeWithText("Invalid placement placeholder").assertIsDisplayed()
+        assertTrue(checkNotNull(visual.layoutSession).isClosed)
+        assertTrue(visual.blockSessions.values.single().isClosed)
+        assertFalse(visual.blockJobs.values.single().isActive)
+    }
+
+    @Test
     fun `runtime placement cycle is contained even when persisted state is corrupt`() = runTest {
         val visual = VisualRegistrations(nested = true)
         val registry = TestRegistry(listOf(visual.layout, visual.block))
@@ -517,13 +617,7 @@ class CompositionEngineTest {
         val current = installVisualTree(store, visual)
         val valid = store.read()
         val blockId = ModuleInstanceId.parse("org.quicklauncher.test/visual-block-instance")
-        val corrupt = LauncherSnapshot(
-            revision = valid.revision,
-            startDestinationId = valid.startDestinationId,
-            destinations = valid.destinations,
-            destinationLayouts = valid.destinationLayouts,
-            moduleInstances = valid.moduleInstances,
-            configurationDocuments = valid.configurationDocuments,
+        val corrupt = valid.withRestoredComposition(
             placements = valid.placements + PlacementRecord(
                 PlacementId.parse("org.quicklauncher.test/cycle-placement"),
                 ModuleInstanceId.parse("org.quicklauncher.test/visual-layout-instance"),
@@ -551,16 +645,10 @@ class CompositionEngineTest {
         )
         val current = installVisualTree(store, visual)
         val valid = store.read()
-        val corrupt = LauncherSnapshot(
-            revision = valid.revision,
-            startDestinationId = valid.startDestinationId,
-            destinations = valid.destinations,
+        val corrupt = valid.withRestoredComposition(
             destinationLayouts = valid.destinationLayouts.map {
                 if (it.selected) it.copy(layoutContributionId = visual.block.descriptor.metadata.id) else it
             },
-            moduleInstances = valid.moduleInstances,
-            configurationDocuments = valid.configurationDocuments,
-            placements = valid.placements,
         )
 
         val prepared = DefaultCompositionEngine(registry, backgroundScope).prepare(
@@ -592,6 +680,37 @@ class CompositionEngineTest {
         assertEquals(null, visual.renderCounts[ModuleInstanceId.parse("org.quicklauncher.test/visual-block-instance-second")])
         assertEquals(listOf(1, 1), visual.renderedPlacementSchemas)
     }
+
+    @Test
+    fun `ordinary renderer failure is reported and isolated behind a safe placeholder`() = runTest {
+        val layouts = RecordingLayouts(throwOnRender = true)
+        val registry = TestRegistry(listOf(layouts.registration))
+        val store = InMemoryLauncherStore()
+        val current = install(store, layouts, "current", 0, 0, bootstrap = true)
+        val reported = mutableListOf<CompositionIssue>()
+        val failures = mutableListOf<RuntimeException>()
+        val placeholders = mutableListOf<CompositionIssue>()
+        val prepared = DefaultCompositionEngine(registry, backgroundScope).prepare(
+            CompositionRequest(
+                store.read(),
+                current,
+                testEnvironment().copy(
+                    rendererFailures = { issue, failure ->
+                        reported += issue
+                        failures += failure
+                    },
+                    placeholderRenderer = { issue, _ -> placeholders += issue },
+                ),
+            ),
+        )
+
+        compose.setContent { prepared.current.Render() }
+        compose.waitForIdle()
+
+        assertEquals(listOf(CompositionIssueKind.RENDER_FAILED), reported.map { it.kind })
+        assertEquals(listOf("deliberate render failure"), failures.map { it.message })
+        assertEquals(reported, placeholders)
+    }
 }
 
 private data class TestConfig(val value: String)
@@ -614,6 +733,7 @@ private class TestCodec(
 private class RecordingLayouts(
     private val codec: TestCodec = TestCodec(),
     private val throwOnOpen: Boolean = false,
+    private val throwOnRender: Boolean = false,
 ) {
     var cancelOnOpen: ModuleInstanceId? = null
     val opened = mutableListOf<ModuleInstanceId>()
@@ -637,6 +757,7 @@ private class RecordingLayouts(
                     override fun close() { isClosed = true }
                     @androidx.compose.runtime.Composable
                     override fun Render(input: LayoutRenderInput) {
+                        if (throwOnRender) error("deliberate render failure")
                         actionResults[input.instanceId] = input.actions.emit(LayoutAction.OpenSettings(input.instanceId))
                     }
                 }.also { sessions[context.instanceId] = it }
@@ -673,10 +794,12 @@ private class VisualRegistrations(
     private val blockId = ContributionId.parse("org.quicklauncher.test/visual-block")
     val openedBlocks = mutableListOf<ModuleInstanceId>()
     var openedLayouts = 0
+    var layoutSession: LayoutSession? = null
     val blockConfigurations = mutableListOf<TestConfig>()
     val blockSessions = linkedMapOf<ModuleInstanceId, BlockSession>()
     val blockJobs = linkedMapOf<ModuleInstanceId, Job>()
     val renderCounts = linkedMapOf<ModuleInstanceId, Int>()
+    val renderStatuses = linkedMapOf<ModuleInstanceId, RenderStatus>()
     val renderedPlacementSchemas = mutableListOf<Int>()
     val layout = RegisteredLayout(
         LayoutDescriptor(
@@ -710,7 +833,7 @@ private class VisualRegistrations(
                             }
                         }
                     }
-                }
+                }.also { layoutSession = it }
             }
         },
         layoutCodec,
@@ -747,6 +870,7 @@ private class VisualRegistrations(
                     @androidx.compose.runtime.Composable
                     override fun Render(input: BlockRenderInput) {
                         renderCounts[input.instanceId] = renderCounts.getOrDefault(input.instanceId, 0) + 1
+                        renderStatuses[input.instanceId] = input.state.status
                     }
                 }.also { blockSessions[context.instanceId] = it }
             }
@@ -870,6 +994,7 @@ private suspend fun addVisualBlock(
     index: Int,
 ) {
     val idSuffix = suffix?.let { "-$it" }.orEmpty()
+    val layoutInstanceId = ModuleInstanceId.parse("org.quicklauncher.test/visual-layout-instance")
     val blockInstanceId = ModuleInstanceId.parse("org.quicklauncher.test/visual-block-instance$idSuffix")
     val blockDocumentId = ConfigurationDocumentId.parse("org.quicklauncher.test/visual-block-config$idSuffix")
     val before = store.read()

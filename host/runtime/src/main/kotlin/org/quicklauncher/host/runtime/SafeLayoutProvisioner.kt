@@ -46,11 +46,34 @@ object SafeLayoutIds {
             )
         }
 
+    fun recordsFor(destinationId: DestinationId, selected: Boolean): SafeLayoutRecords {
+        val instanceId = instanceFor(destinationId)
+        val configurationId = configurationFor(destinationId)
+        return SafeLayoutRecords(
+            DestinationLayoutRecord(destinationId, CONTRIBUTION, instanceId, selected),
+            ModuleInstanceRecord(instanceId, CONTRIBUTION, configurationId),
+            StoredConfigurationDocument(
+                configurationId,
+                ConfigurationDocument(
+                    CONFIG_TYPE,
+                    SchemaVersion.of(1),
+                    EncodedConfiguration.of("{}"),
+                ),
+            ),
+        )
+    }
+
     private fun digest(value: String): String = MessageDigest.getInstance("SHA-256")
         .digest(value.toByteArray(Charsets.UTF_8))
         .take(10)
         .joinToString(separator = "") { byte -> "%02x".format(byte) }
 }
+
+data class SafeLayoutRecords(
+    val layout: DestinationLayoutRecord,
+    val instance: ModuleInstanceRecord,
+    val configuration: StoredConfigurationDocument,
+)
 
 class SafeLayoutProvisioner(private val store: LauncherStore) {
     suspend fun ensureAvailable(): LauncherSnapshot {
@@ -68,22 +91,9 @@ class SafeLayoutProvisioner(private val store: LauncherStore) {
                         }
                     }
                     .map { destination ->
-                        val instanceId = SafeLayoutIds.instanceFor(destination.id)
-                        val configurationId = SafeLayoutIds.configurationFor(destination.id)
-                        LauncherEdit.RetainLayout(
-                            layout = DestinationLayoutRecord(
-                                destinationId = destination.id,
-                                layoutContributionId = SafeLayoutIds.CONTRIBUTION,
-                                layoutInstanceId = instanceId,
-                                selected = false,
-                            ),
-                            layoutInstance = ModuleInstanceRecord(
-                                id = instanceId,
-                                contributionId = SafeLayoutIds.CONTRIBUTION,
-                                configurationDocumentId = configurationId,
-                            ),
-                            configuration = safeConfiguration(configurationId),
-                        )
+                        SafeLayoutIds.recordsFor(destination.id, selected = false).let { records ->
+                            LauncherEdit.RetainLayout(records.layout, records.instance, records.configuration)
+                        }
                     }
             }
             if (edits.isEmpty()) return current
@@ -137,35 +147,19 @@ class SafeLayoutProvisioner(private val store: LauncherStore) {
         }
     }
 
-    private fun startInstall(): DestinationInstall = DestinationInstall(
+    private fun startInstall(): DestinationInstall {
+        val records = SafeLayoutIds.recordsFor(SafeLayoutIds.START_DESTINATION, selected = true)
+        return DestinationInstall(
             destination = DestinationRecord(
                 id = SafeLayoutIds.START_DESTINATION,
                 name = "Start",
                 coordinate = DestinationCoordinate(0, 0),
             ),
-            layout = DestinationLayoutRecord(
-                destinationId = SafeLayoutIds.START_DESTINATION,
-                layoutContributionId = SafeLayoutIds.CONTRIBUTION,
-                layoutInstanceId = SafeLayoutIds.START_INSTANCE,
-                selected = true,
-            ),
-            layoutInstance = ModuleInstanceRecord(
-                id = SafeLayoutIds.START_INSTANCE,
-                contributionId = SafeLayoutIds.CONTRIBUTION,
-                configurationDocumentId = SafeLayoutIds.START_CONFIGURATION,
-            ),
-            configuration = safeConfiguration(SafeLayoutIds.START_CONFIGURATION),
+            layout = records.layout,
+            layoutInstance = records.instance,
+            configuration = records.configuration,
         )
-
-    private fun safeConfiguration(id: ConfigurationDocumentId): StoredConfigurationDocument =
-        StoredConfigurationDocument(
-            id = id,
-            document = ConfigurationDocument(
-                configType = SafeLayoutIds.CONFIG_TYPE,
-                schemaVersion = SchemaVersion.of(1),
-                encoded = EncodedConfiguration.of("{}"),
-            ),
-        )
+    }
 
     private companion object {
         const val MAXIMUM_COMMIT_ATTEMPTS = 3

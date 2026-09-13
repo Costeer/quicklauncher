@@ -58,6 +58,27 @@ class AndroidAppPlatformTest {
     }
 
     @Test
+    fun `snapshot and launch reject unknown profile types before metadata reads`() = runTest {
+        val unknown = "android.os.usertype.profile.CLONE"
+        val backend = FakeBackend(
+            profiles = listOf(profile(99, unknown)),
+            activities = mapOf(99L to listOf(activity(99, "org.example.clone", "Clone secret"))),
+        )
+        val platform = AndroidAppPlatform(backend, StandardTestDispatcher(testScheduler))
+
+        val snapshot = platform.snapshot()
+        val launch = platform.launch(identity(99, "org.example.clone"))
+
+        assertTrue(snapshot.profiles.isEmpty())
+        assertTrue(snapshot.activities.isEmpty())
+        assertTrue(backend.activityReads.isEmpty())
+        assertEquals(AppLaunchResult.SecurityDenied, launch)
+        assertTrue(backend.enabledChecks.isEmpty())
+        assertTrue(backend.starts.isEmpty())
+        platform.close()
+    }
+
+    @Test
     fun `snapshot retains a locked work profile without reading its app labels`() = runTest {
         val backend = FakeBackend(
             profiles = listOf(profile(11, WORK_TYPE, quiet = true, unlocked = false)),

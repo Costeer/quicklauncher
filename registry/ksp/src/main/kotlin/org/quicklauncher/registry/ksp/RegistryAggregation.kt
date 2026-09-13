@@ -102,11 +102,13 @@ object RegistryAggregationValidator {
                     issues += "[registry.unsupported-contract-major] Contribution '${entry.contributionId}' " +
                         "declares unsupported contract major ${entry.contractMajor}"
                 }
-                if (entry.contributionId == HOST_OWNED_SAFE_LAYOUT_ID ||
-                    entry.configTypeId == HOST_OWNED_SAFE_LAYOUT_ID
-                ) {
+                if (entry.contributionId == HOST_OWNED_SAFE_LAYOUT_ID) {
                     issues += "[registry.reserved-safe-layout-identity] Contribution '${entry.contributionId}' " +
-                        "claims the host-owned safe layout identity"
+                        "claims reserved contribution ID '$HOST_OWNED_SAFE_LAYOUT_ID'"
+                }
+                if (entry.configTypeId == HOST_OWNED_SAFE_LAYOUT_ID) {
+                    issues += "[registry.reserved-safe-layout-identity] Contribution '${entry.contributionId}' " +
+                        "claims reserved configuration type ID '$HOST_OWNED_SAFE_LAYOUT_ID'"
                 }
                 entry.providedCapabilities.forEach { value ->
                     if (parse(value, CapabilityId::parse) == null) {

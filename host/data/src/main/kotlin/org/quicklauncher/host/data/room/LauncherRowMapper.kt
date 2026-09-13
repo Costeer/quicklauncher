@@ -36,6 +36,7 @@ import org.quicklauncher.host.data.store.StoreRevision
 import org.quicklauncher.host.data.store.StoredConfigurationDocument
 import org.quicklauncher.host.data.store.ThemeProfileRecord
 import org.quicklauncher.host.data.store.WidgetBindState
+import org.quicklauncher.host.data.store.WidgetCleanupState
 import org.quicklauncher.host.data.store.WidgetPlacementRecord
 import org.quicklauncher.host.data.store.WidgetRestoreState
 import org.quicklauncher.host.data.store.restoreContentItem
@@ -308,6 +309,7 @@ private fun WidgetPlacementEntity.toRecord(): WidgetPlacementRecord {
             }
         },
         restoreState = WidgetRestoreState.valueOf(payload.restoreState),
+        cleanupState = WidgetCleanupState.valueOf(cleanupState),
     )
 }
 
@@ -318,6 +320,7 @@ private fun WidgetPlacementRecord.toEntity(): WidgetPlacementEntity = WidgetPlac
     providerClassName = providerClassName,
     appWidgetId = appWidgetId,
     bindingState = bindState.name,
+    cleanupState = cleanupState.name,
     encodedOptions = payloadJson.encodeToString(
         WidgetPlacementPayload(
             intendedWidthDp,

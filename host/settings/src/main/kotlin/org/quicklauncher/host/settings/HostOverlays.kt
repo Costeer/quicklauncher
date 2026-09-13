@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
@@ -18,6 +20,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
@@ -29,6 +35,27 @@ import org.quicklauncher.host.runtime.LauncherDestination
 import org.quicklauncher.host.runtime.LauncherApp
 import org.quicklauncher.host.runtime.RecoveryInstance
 import org.quicklauncher.host.runtime.permissions.HomeRoleState
+import org.quicklauncher.host.runtime.notifications.NotificationAccessState
+import org.quicklauncher.host.runtime.profile.ProfileAvailability
+import org.quicklauncher.host.runtime.profile.ProfileState
+import org.quicklauncher.host.runtime.profile.ProfileTransition
+import org.quicklauncher.host.runtime.shortcuts.ShortcutTargetIdentity
+
+enum class IndicatorStyleOption { HIDDEN, DOT, APPROXIMATE_COUNT }
+enum class PrivateSpaceVisibilityOption { VISIBLE, HIDDEN }
+
+data class ShortcutSelectionItem(
+    val target: ShortcutTargetIdentity,
+    val label: String,
+    val workProfile: Boolean,
+    val dynamic: Boolean,
+    val pinned: Boolean,
+) {
+    init {
+        require(label.isNotBlank()) { "Shortcut selection labels must not be blank" }
+        require(dynamic || pinned) { "Only dynamic or pinned shortcuts may be selected" }
+    }
+}
 
 @Composable
 fun LauncherSettingsSurface(
@@ -37,12 +64,24 @@ fun LauncherSettingsSurface(
     onRequestHomeRole: () -> Unit,
     onOpenHomeSettings: () -> Unit,
     onOpenAppRecovery: () -> Unit,
+    notificationStyle: IndicatorStyleOption = IndicatorStyleOption.HIDDEN,
+    notificationAccess: NotificationAccessState = NotificationAccessState.ACTION_REQUIRED,
+    onNotificationStyle: (IndicatorStyleOption) -> Unit = {},
+    onRequestNotificationAccess: () -> Unit = {},
+    onOpenNotificationRecovery: () -> Unit = {},
+    privateSpaceVisibility: PrivateSpaceVisibilityOption = PrivateSpaceVisibilityOption.VISIBLE,
+    onPrivateSpaceVisibility: (PrivateSpaceVisibilityOption) -> Unit = {},
+    onOpenPrivateSpaceSettings: () -> Unit = {},
+    workProfiles: List<ProfileState> = emptyList(),
+    onSetWorkMode: (org.quicklauncher.contracts.domain.ProfileSerial, Boolean) -> Unit = { _, _ -> },
+    shortcuts: List<ShortcutSelectionItem> = emptyList(),
+    onAddShortcut: (ShortcutTargetIdentity) -> Unit = {},
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     OverlayScaffold(stringResource(R.string.settings_title), onClose, modifier) { contentModifier ->
         Column(
-            modifier = contentModifier,
+            modifier = contentModifier.verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text(
@@ -66,6 +105,126 @@ fun LauncherSettingsSurface(
             }
             OutlinedButton(onClick = onOpenAppRecovery) {
                 Text(stringResource(R.string.open_app_recovery))
+            }
+            Text(
+                stringResource(R.string.notification_indicators),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.semantics { heading() },
+            )
+            Text(stringResource(notificationAccess.explanationResource()))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                IndicatorStyleOption.entries.forEach { style ->
+                    OutlinedButton(onClick = { onNotificationStyle(style) }) {
+                        Text(
+                            stringResource(style.labelResource()) +
+                                if (style == notificationStyle) " ✓" else "",
+                        )
+                    }
+                }
+            }
+            if (notificationAccess == NotificationAccessState.ACTION_REQUIRED ||
+                notificationAccess == NotificationAccessState.DENIED ||
+                notificationAccess == NotificationAccessState.REVOKED
+            ) {
+                Button(onClick = onRequestNotificationAccess) {
+                    Text(stringResource(R.string.notification_access_request))
+                }
+            }
+            if (notificationAccess == NotificationAccessState.DENIED ||
+                notificationAccess == NotificationAccessState.REVOKED ||
+                notificationAccess == NotificationAccessState.DISCONNECTED
+            ) {
+                OutlinedButton(onClick = onOpenNotificationRecovery) {
+                    Text(stringResource(R.string.notification_access_recovery))
+                }
+            }
+            Text(
+                stringResource(R.string.private_space_title),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.semantics { heading() },
+            )
+            Text(
+                stringResource(
+                    if (privateSpaceVisibility == PrivateSpaceVisibilityOption.VISIBLE) {
+                        R.string.private_space_container_visible
+                    } else {
+                        R.string.private_space_container_hidden
+                    },
+                ),
+            )
+            OutlinedButton(
+                onClick = {
+                    onPrivateSpaceVisibility(
+                        if (privateSpaceVisibility == PrivateSpaceVisibilityOption.VISIBLE) {
+                            PrivateSpaceVisibilityOption.HIDDEN
+                        } else {
+                            PrivateSpaceVisibilityOption.VISIBLE
+                        },
+                    )
+                },
+            ) {
+                Text(
+                    stringResource(
+                        if (privateSpaceVisibility == PrivateSpaceVisibilityOption.VISIBLE) {
+                            R.string.private_space_hide
+                        } else {
+                            R.string.private_space_show
+                        },
+                    ),
+                )
+            }
+            OutlinedButton(onClick = onOpenPrivateSpaceSettings) {
+                Text(stringResource(R.string.private_space_settings))
+            }
+            if (workProfiles.isNotEmpty()) {
+                Text(
+                    "Work profiles",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.semantics { heading() },
+                )
+                workProfiles.forEachIndexed { index, profile ->
+                    val enabled = profile.availability == ProfileAvailability.AVAILABLE
+                    val transitioning = profile.transition != ProfileTransition.IDLE
+                    Text(
+                        when {
+                            transitioning -> "Work profile ${index + 1}: changing mode"
+                            enabled -> "Work profile ${index + 1}: available"
+                            profile.availability == ProfileAvailability.QUIET ->
+                                "Work profile ${index + 1}: paused"
+                            else -> "Work profile ${index + 1}: unavailable"
+                        },
+                    )
+                    OutlinedButton(
+                        onClick = { onSetWorkMode(profile.serial, !enabled) },
+                        enabled = !transitioning &&
+                            profile.availability != ProfileAvailability.UNRESOLVED,
+                    ) {
+                        Text(if (enabled) "Pause work apps" else "Resume work apps")
+                    }
+                }
+            }
+            Text(
+                stringResource(R.string.app_shortcuts),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.semantics { heading() },
+            )
+            if (shortcuts.isEmpty()) {
+                Text(stringResource(R.string.no_app_shortcuts))
+            } else {
+                shortcuts.forEach { shortcut ->
+                    OutlinedButton(
+                        onClick = { onAddShortcut(shortcut.target) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            if (shortcut.workProfile) {
+                                stringResource(R.string.add_work_shortcut, shortcut.label)
+                            } else {
+                                stringResource(R.string.add_shortcut, shortcut.label)
+                            },
+                        )
+                    }
+                }
             }
         }
     }
@@ -109,14 +268,52 @@ fun AppRecoverySurface(
 fun MapOverviewSurface(
     destinations: List<LauncherDestination>,
     onSelectDestination: (DestinationId) -> Unit,
+    onOpenPrivateSpace: () -> Unit = {},
+    privateSpaceVisible: Boolean = true,
+    privateSpaceEntryPointAvailable: Boolean = true,
+    onCreateFolder: (String) -> Unit = {},
+    onEditMap: () -> Unit = {},
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var creatingFolder by remember { mutableStateOf(false) }
     OverlayScaffold(stringResource(R.string.map_title), onClose, modifier) { contentModifier ->
         LazyColumn(
             modifier = contentModifier,
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            if (privateSpaceEntryPointAvailable) item {
+                Button(
+                    onClick = onOpenPrivateSpace,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        stringResource(
+                            if (privateSpaceVisible) {
+                                R.string.private_space_title
+                            } else {
+                                R.string.private_space_show
+                            },
+                        ),
+                    )
+                }
+            }
+            item {
+                OutlinedButton(
+                    onClick = { creatingFolder = true },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Create folder")
+                }
+            }
+            item {
+                OutlinedButton(
+                    onClick = onEditMap,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.edit_map))
+                }
+            }
             items(destinations, key = { it.id.value }) { destination ->
                 Card(
                     onClick = { onSelectDestination(destination.id) },
@@ -134,6 +331,31 @@ fun MapOverviewSurface(
             }
         }
     }
+    if (creatingFolder) {
+        CreateFolderDialog(
+            onCreate = { name ->
+                creatingFolder = false
+                onCreateFolder(name)
+            },
+            onDismiss = { creatingFolder = false },
+        )
+    }
+}
+
+private fun IndicatorStyleOption.labelResource(): Int = when (this) {
+    IndicatorStyleOption.HIDDEN -> R.string.notification_style_hidden
+    IndicatorStyleOption.DOT -> R.string.notification_style_dot
+    IndicatorStyleOption.APPROXIMATE_COUNT -> R.string.notification_style_count
+}
+
+private fun NotificationAccessState.explanationResource(): Int = when (this) {
+    NotificationAccessState.ACTION_REQUIRED -> R.string.notification_access_action_required
+    NotificationAccessState.AWAITING_DECISION -> R.string.notification_access_awaiting
+    NotificationAccessState.CONNECTED -> R.string.notification_access_connected
+    NotificationAccessState.DISCONNECTED -> R.string.notification_access_disconnected
+    NotificationAccessState.DENIED -> R.string.notification_access_denied
+    NotificationAccessState.REVOKED -> R.string.notification_access_revoked
+    NotificationAccessState.UNAVAILABLE -> R.string.notification_access_unavailable
 }
 
 @Composable
@@ -184,7 +406,7 @@ fun RecoverySurface(
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
-private fun OverlayScaffold(
+internal fun OverlayScaffold(
     title: String,
     onClose: () -> Unit,
     modifier: Modifier,

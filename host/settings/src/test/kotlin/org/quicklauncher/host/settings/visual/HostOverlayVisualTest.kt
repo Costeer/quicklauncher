@@ -10,13 +10,28 @@ import com.android.resources.ScreenOrientation
 import org.junit.Rule
 import org.junit.Test
 import org.quicklauncher.contracts.domain.DestinationId
+import org.quicklauncher.contracts.domain.ContentItemId
 import org.quicklauncher.contracts.domain.ModuleInstanceId
+import org.quicklauncher.contracts.domain.ProfileSerial
 import org.quicklauncher.host.runtime.LauncherDestination
 import org.quicklauncher.host.runtime.RecoveryInstance
+import org.quicklauncher.host.runtime.actions.ItemAction
+import org.quicklauncher.host.runtime.actions.ItemActionOverlayState
+import org.quicklauncher.host.runtime.actions.ItemAvailability
+import org.quicklauncher.host.runtime.folders.FolderMemberKind
+import org.quicklauncher.host.runtime.folders.FolderMemberPresentation
+import org.quicklauncher.host.runtime.folders.FolderOverlayState
 import org.quicklauncher.host.runtime.permissions.HomeRoleState
+import org.quicklauncher.host.runtime.profile.PrivateSpaceState
+import org.quicklauncher.host.runtime.profile.ProfileAvailability
+import org.quicklauncher.host.runtime.profile.ProfileTransition
+import org.quicklauncher.host.runtime.profile.SecureOverlayProtection
+import org.quicklauncher.host.settings.FolderOverlaySurface
+import org.quicklauncher.host.settings.ItemActionOverlaySurface
 import org.quicklauncher.host.settings.LauncherSettingsSurface
 import org.quicklauncher.host.settings.AppRecoverySurface
 import org.quicklauncher.host.settings.MapOverviewSurface
+import org.quicklauncher.host.settings.PrivateSpaceOverlay
 import org.quicklauncher.host.settings.RecoverySurface
 
 class HostOverlayVisualTest {
@@ -78,6 +93,78 @@ class HostOverlayVisualTest {
                     onClose = {},
                 )
             }
+        }
+    }
+
+    @Test
+    fun `phase five overlays remain accessible across visual modes and policy states`() {
+        variants.forEach { variant ->
+            snapshot(variant, "folder") {
+                FolderOverlaySurface(
+                    state = folder,
+                    onActivateMember = {},
+                    onMoveMember = { _, _ -> },
+                    onRemoveMember = {},
+                    onRename = {},
+                    onDelete = {},
+                    onClose = {},
+                )
+            }
+            snapshot(variant, "item-actions") {
+                ItemActionOverlaySurface(
+                    state = itemActions,
+                    onCommand = {},
+                    onClose = {},
+                )
+            }
+        }
+        snapshot(variants.first(), "private-locked") {
+            PrivateSpaceOverlay(
+                state = PrivateSpaceState(
+                    ProfileSerial.of(20),
+                    ProfileAvailability.LOCKED,
+                    ProfileTransition.IDLE,
+                    emptyList(),
+                ),
+                protection = noOpProtection,
+                onLock = {},
+                onUnlock = {},
+                onLaunch = {},
+                onOpenSettings = {},
+                onClose = {},
+            )
+        }
+        snapshot(variants.first(), "private-loading") {
+            PrivateSpaceOverlay(
+                state = PrivateSpaceState(
+                    ProfileSerial.of(20),
+                    ProfileAvailability.LOCKED,
+                    ProfileTransition.UNLOCKING,
+                    emptyList(),
+                ),
+                protection = noOpProtection,
+                onLock = {},
+                onUnlock = {},
+                onLaunch = {},
+                onOpenSettings = {},
+                onClose = {},
+            )
+        }
+        snapshot(variants.first(), "private-empty") {
+            PrivateSpaceOverlay(
+                state = PrivateSpaceState(
+                    ProfileSerial.of(20),
+                    ProfileAvailability.AVAILABLE,
+                    ProfileTransition.IDLE,
+                    emptyList(),
+                ),
+                protection = noOpProtection,
+                onLock = {},
+                onUnlock = {},
+                onLaunch = {},
+                onOpenSettings = {},
+                onClose = {},
+            )
         }
     }
 
@@ -154,6 +241,42 @@ class HostOverlayVisualTest {
                 workProfile = true,
             ),
         )
+
+        val folder = FolderOverlayState.Open(
+            id = ContentItemId.parse("org.quicklauncher.fixture/folder"),
+            name = "Travel",
+            members = listOf(
+                FolderMemberPresentation(
+                    id = ContentItemId.parse("org.quicklauncher.fixture/personal"),
+                    label = "Maps",
+                    kind = FolderMemberKind.APP,
+                    workBadge = false,
+                    available = true,
+                    durableIndex = 0,
+                ),
+                FolderMemberPresentation(
+                    id = ContentItemId.parse("org.quicklauncher.fixture/work"),
+                    label = "Work calendar",
+                    kind = FolderMemberKind.APP,
+                    workBadge = true,
+                    available = false,
+                    durableIndex = 1,
+                ),
+            ),
+            durableMemberCount = 3,
+        )
+
+        val itemActions = ItemActionOverlayState.Open(
+            itemId = ContentItemId.parse("org.quicklauncher.fixture/actions"),
+            label = "Maps",
+            availability = ItemAvailability.AVAILABLE,
+            actions = setOf(ItemAction.FAVORITE, ItemAction.HIDE, ItemAction.OPEN_DETAILS),
+            folderIds = setOf(folder.id),
+            memberOfFolderIds = emptySet(),
+            folderLabels = mapOf(folder.id to folder.name),
+        )
+
+        val noOpProtection = SecureOverlayProtection { AutoCloseable {} }
 
         val variants = listOf(
             VisualVariant(

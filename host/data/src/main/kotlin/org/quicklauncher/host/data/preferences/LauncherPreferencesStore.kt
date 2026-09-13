@@ -22,4 +22,6 @@ interface LauncherPreferencesStore : AutoCloseable {
     suspend fun setNotificationStyle(style: NotificationStyle): LauncherPreferences
 
     suspend fun setOnboardingState(state: OnboardingState): LauncherPreferences
+
+    suspend fun setPrivateSpaceVisibility(visibility: PrivateSpaceVisibility): LauncherPreferences
 }

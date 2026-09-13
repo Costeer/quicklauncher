@@ -16,8 +16,15 @@ import org.quicklauncher.contracts.contribution.TemplateResult
 import org.quicklauncher.contracts.domain.ConfigurationDocumentId
 import org.quicklauncher.contracts.domain.DestinationId
 import org.quicklauncher.contracts.domain.ModuleInstanceId
+import org.quicklauncher.modules.templates.core.generated.CoreTemplateRegistry
+import org.quicklauncher.testing.contracts.RegisteredContributionContractSuite
 
 class CoreTemplatesTest {
+    @Test
+    fun `every template satisfies the reusable public contribution contract suite`() {
+        RegisteredContributionContractSuite.verify(CoreTemplateRegistry.entries)
+    }
+
     @Test
     fun `modular plan positions center entry and apps as one connected map`() {
         val result = ModularTemplate.create(
@@ -42,7 +49,7 @@ class CoreTemplatesTest {
             result.plan.destinations[0].draft.blocks.map { it.contributionId.value.substringAfterLast('/') },
         )
         assertEquals(
-            "app-grid",
+            "search",
             result.plan.destinations[1].draft.blocks.single().contributionId.value.substringAfterLast('/'),
         )
         assertEquals(
@@ -125,14 +132,14 @@ class CoreTemplatesTest {
     ): TemplateInput<C> = TemplateInput(
         destinationNames.mapIndexed { index, name ->
             TemplateDestinationInput(
-                DestinationId.parse("org.quicklauncher.template-test/destination-$index"),
+                DestinationId.parse("org.quicklauncher.templatetest/destination-$index"),
                 org.quicklauncher.contracts.contribution.DisplayText.of(name),
             )
         },
         List(moduleCount) { index ->
             ModuleDraftIdentity(
-                ModuleInstanceId.parse("org.quicklauncher.template-test/module-$index"),
-                ConfigurationDocumentId.parse("org.quicklauncher.template-test/configuration-$index"),
+                ModuleInstanceId.parse("org.quicklauncher.templatetest/module-$index"),
+                ConfigurationDocumentId.parse("org.quicklauncher.templatetest/configuration-$index"),
             )
         },
         configuration,

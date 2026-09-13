@@ -211,6 +211,7 @@ enum class SettingKind {
     COLOR,
     FONT,
     APP_SELECTOR,
+    CONTENT_SELECTOR,
 }
 
 enum class FontRoleSpec {

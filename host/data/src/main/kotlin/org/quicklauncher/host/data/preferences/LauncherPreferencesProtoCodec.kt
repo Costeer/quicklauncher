@@ -13,6 +13,7 @@ import org.quicklauncher.host.data.preferences.proto.StoredHistoryPolicy
 import org.quicklauncher.host.data.preferences.proto.StoredLauncherPreferences
 import org.quicklauncher.host.data.preferences.proto.StoredNotificationStyle
 import org.quicklauncher.host.data.preferences.proto.StoredOnboardingState
+import org.quicklauncher.host.data.preferences.proto.StoredPrivateSpaceVisibility
 
 internal object LauncherPreferencesProtoCodec {
     const val SCHEMA_VERSION: Int = 1
@@ -59,6 +60,14 @@ internal object LauncherPreferencesProtoCodec {
                     OnboardingState.COMPLETED
                 else -> error("Unknown onboarding state ${value.onboardingState}")
             },
+            privateSpaceVisibility = when (value.privateSpaceVisibility) {
+                StoredPrivateSpaceVisibility.STORED_PRIVATE_SPACE_VISIBILITY_UNSPECIFIED,
+                StoredPrivateSpaceVisibility.STORED_PRIVATE_SPACE_VISIBILITY_VISIBLE,
+                -> PrivateSpaceVisibility.VISIBLE
+                StoredPrivateSpaceVisibility.STORED_PRIVATE_SPACE_VISIBILITY_HIDDEN ->
+                    PrivateSpaceVisibility.HIDDEN
+                else -> error("Unknown Private Space visibility ${value.privateSpaceVisibility}")
+            },
         )
     }
 
@@ -102,6 +111,14 @@ internal object LauncherPreferencesProtoCodec {
                         StoredOnboardingState.STORED_ONBOARDING_STATE_IN_PROGRESS
                     OnboardingState.COMPLETED ->
                         StoredOnboardingState.STORED_ONBOARDING_STATE_COMPLETED
+                },
+            )
+            .setPrivateSpaceVisibility(
+                when (value.privateSpaceVisibility) {
+                    PrivateSpaceVisibility.VISIBLE ->
+                        StoredPrivateSpaceVisibility.STORED_PRIVATE_SPACE_VISIBILITY_VISIBLE
+                    PrivateSpaceVisibility.HIDDEN ->
+                        StoredPrivateSpaceVisibility.STORED_PRIVATE_SPACE_VISIBILITY_HIDDEN
                 },
             )
             .build()

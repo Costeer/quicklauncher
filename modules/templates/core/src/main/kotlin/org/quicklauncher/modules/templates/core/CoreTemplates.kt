@@ -103,7 +103,7 @@ abstract class PopulatedTemplateCodec(private val typeId: String) :
 
     private companion object {
         val POPULATED_JSON = Regex(
-            """\{"includeClock":(true|false),"includeFavorites":(true|false)}""",
+            """\{"includeClock":(true|false),"includeFavorites":(true|false)\}""",
         )
     }
 }
@@ -133,7 +133,7 @@ object BlankTemplateCodec : ConfigurationCodec<BlankTemplateConfiguration> {
         }
     }
 
-    private val BLANK_JSON = Regex("""\{"columns":(-?\d+)}""")
+    private val BLANK_JSON = Regex("""\{"columns":(-?\d+)\}""")
 }
 
 @RegisterDestinationTemplate(
@@ -152,6 +152,7 @@ object BlankTemplateCodec : ConfigurationCodec<BlankTemplateConfiguration> {
         CoreContributionIds.APP_GRID_BLOCK,
         CoreContributionIds.FAVORITES_BLOCK,
         CoreContributionIds.CLOCK_BLOCK,
+        CoreContributionIds.SEARCH_BLOCK,
     ],
     maximumBlocks = 4,
 )
@@ -242,9 +243,9 @@ private fun createModular(
         CoreConfigurationDefaults.SINGLE,
     )
     val entryBlock = identities.module(
-        CoreContributionIds.APP_GRID_BLOCK,
-        CoreConfigurationIds.APP_GRID,
-        CoreConfigurationDefaults.APP_GRID,
+        CoreContributionIds.SEARCH_BLOCK,
+        CoreConfigurationIds.SEARCH,
+        CoreConfigurationDefaults.SEARCH,
     )
     val appsLayout = identities.module(
         CoreContributionIds.SINGLE_LAYOUT,
@@ -505,6 +506,7 @@ private object CoreContributionIds {
     const val APP_GRID_BLOCK = "org.quicklauncher.block/app-grid"
     const val FAVORITES_BLOCK = "org.quicklauncher.block/favorites"
     const val CLOCK_BLOCK = "org.quicklauncher.block/clock-date"
+    const val SEARCH_BLOCK = "org.quicklauncher.block/search"
 }
 
 private object CoreConfigurationIds {
@@ -514,6 +516,7 @@ private object CoreConfigurationIds {
     const val APP_GRID = "org.quicklauncher.block/app-grid-config"
     const val FAVORITES = "org.quicklauncher.block/favorites-config"
     const val CLOCK = "org.quicklauncher.block/clock-date-config"
+    const val SEARCH = "org.quicklauncher.block/search-config"
 }
 
 private object CoreConfigurationDefaults {
@@ -523,4 +526,5 @@ private object CoreConfigurationDefaults {
     const val APP_GRID = "{\"columns\":4}"
     const val FAVORITES = "{\"maximumItems\":5}"
     const val CLOCK = "{\"showDate\":true}"
+    const val SEARCH = "{\"minimumCharacters\":0}"
 }

@@ -155,9 +155,13 @@ class DefaultSpatialNavigator(
             "Viewport distance must be finite and positive"
         }
         val active = checkNotNull(frame.drag) { "Navigation drag has not started" }
-        val updated = active.copy(progress = active.direction.forwardDistance(unconsumedDistancePx)
-            .div(viewportDistancePx)
-            .coerceIn(0f, 1f))
+        val forwardDistance = active.direction.forwardDistance(unconsumedDistancePx)
+        val progress = if (forwardDistance == 0f) {
+            0f
+        } else {
+            forwardDistance.div(viewportDistancePx).coerceIn(0f, 1f)
+        }
+        val updated = active.copy(progress = progress)
         currentFrame = NavigationFrame(frame.current, frame.neighbors, updated)
         return updated
     }

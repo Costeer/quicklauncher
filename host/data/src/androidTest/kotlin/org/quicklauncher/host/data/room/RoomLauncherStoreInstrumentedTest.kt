@@ -24,9 +24,17 @@ import org.quicklauncher.contracts.domain.ConfigurationDocumentId
 import org.quicklauncher.contracts.domain.ContributionId
 import org.quicklauncher.contracts.domain.DestinationId
 import org.quicklauncher.contracts.domain.ModuleInstanceId
+import org.quicklauncher.contracts.domain.ContentItemId
+import org.quicklauncher.contracts.domain.PackageName
+import org.quicklauncher.contracts.domain.PlacementId
+import org.quicklauncher.contracts.domain.ProfileSerial
 import org.quicklauncher.contracts.domain.SchemaVersion
+import org.quicklauncher.contracts.domain.ShortcutId
+import org.quicklauncher.contracts.domain.StableKey
 import org.quicklauncher.host.data.spatial.DestinationCoordinate
 import org.quicklauncher.host.data.store.CommitResult
+import org.quicklauncher.host.data.store.ContentItemKind
+import org.quicklauncher.host.data.store.ContentItemRecord
 import org.quicklauncher.host.data.store.DestinationInstall
 import org.quicklauncher.host.data.store.DestinationLayoutRecord
 import org.quicklauncher.host.data.store.DestinationRecord
@@ -35,10 +43,18 @@ import org.quicklauncher.host.data.store.LauncherTransaction
 import org.quicklauncher.host.data.store.ModuleInstanceRecord
 import org.quicklauncher.host.data.store.ModuleInstanceStatus
 import org.quicklauncher.host.data.store.ModuleQuarantineOrigin
+import org.quicklauncher.host.data.store.NewPlacedModule
+import org.quicklauncher.host.data.store.EncodedPlacementData
+import org.quicklauncher.host.data.store.PlacementRecord
 import org.quicklauncher.host.data.store.PlacementPolicy
 import org.quicklauncher.host.data.store.StoreRevision
 import org.quicklauncher.host.data.store.StoreRejectionCode
 import org.quicklauncher.host.data.store.StoredConfigurationDocument
+import org.quicklauncher.host.data.store.ShortcutTarget
+import org.quicklauncher.host.data.store.WidgetBindState
+import org.quicklauncher.host.data.store.WidgetCleanupState
+import org.quicklauncher.host.data.store.WidgetPlacementRecord
+import org.quicklauncher.host.data.store.WidgetRestoreState
 
 @RunWith(AndroidJUnit4::class)
 class RoomLauncherStoreInstrumentedTest {
@@ -69,8 +85,13 @@ class RoomLauncherStoreInstrumentedTest {
         migrationHelper.createDatabase(1).closing(::insertVersionOneState)
 
         migrationHelper.runMigrationsAndValidate(
-            5,
-            listOf(LauncherMigration2To3, LauncherMigration3To4, LauncherMigration4To5),
+            6,
+            listOf(
+                LauncherMigration2To3,
+                LauncherMigration3To4,
+                LauncherMigration4To5,
+                LauncherMigration5To6,
+            ),
         ).closing { connection ->
             assertLongQuery(connection, "SELECT COUNT(*) FROM destinations", 1)
             assertTextQuery(
@@ -212,6 +233,116 @@ class RoomLauncherStoreInstrumentedTest {
                 "SELECT revision FROM store_metadata WHERE singletonKey = 1 " +
                     "AND startDestinationId = '$DESTINATION_ID'",
                 0,
+            )
+        }
+    }
+
+    @Test
+    fun versionOneAutoMigrationPreservesLegacyRowsIntoVersionTwo() = runTest {
+        migrationHelper.createDatabase(1).closing(::insertVersionOneState)
+
+        migrationHelper.runMigrationsAndValidate(2, emptyList()).closing { connection ->
+            assertTextQuery(
+                connection,
+                "SELECT encoded FROM configuration_documents WHERE id = '$CONFIGURATION_ID'",
+                RAW_CONFIGURATION,
+            )
+            assertTextQuery(
+                connection,
+                "SELECT encodedPlacement FROM placements WHERE id = '$PLACEMENT_ID'",
+                RAW_PLACEMENT,
+            )
+            assertLongQuery(connection, "SELECT COUNT(*) FROM content_items", 3)
+            assertLongQuery(connection, "SELECT COUNT(*) FROM widget_placements", 1)
+        }
+    }
+
+    @Test
+    fun versionTwoMigrationPreservesOpaqueRowsAndAddsStructuralActivityIdentity() = runTest {
+        migrationHelper.createDatabase(2).closing(::insertVersionOneState)
+
+        migrationHelper.runMigrationsAndValidate(
+            3,
+            listOf(LauncherMigration2To3),
+        ).closing { connection ->
+            assertTextQuery(
+                connection,
+                "SELECT activityName FROM app_overrides WHERE profileSerial = 10",
+                "org.example.app.Main",
+            )
+            assertTextQuery(
+                connection,
+                "SELECT encodedOverride FROM app_overrides WHERE profileSerial = 10",
+                APP_OVERRIDE_PAYLOAD,
+            )
+            assertTextQuery(
+                connection,
+                "SELECT quarantineOrigin FROM module_instances WHERE id = '$INSTANCE_ID'",
+                "OTHER",
+            )
+        }
+    }
+
+    @Test
+    fun versionThreeMigrationPreservesShortcutPayloadAndAddsStructuralShortcutIdentity() = runTest {
+        migrationHelper.createDatabase(3).closing(::insertVersionThreeState)
+
+        migrationHelper.runMigrationsAndValidate(
+            4,
+            listOf(LauncherMigration3To4),
+        ).closing { connection ->
+            assertTextQuery(
+                connection,
+                "SELECT shortcutId FROM content_items WHERE id = '$SHORTCUT_CONTENT_ITEM_ID'",
+                SHORTCUT_ID,
+            )
+            assertTextQuery(
+                connection,
+                "SELECT encodedSemanticData FROM content_items " +
+                    "WHERE id = '$SHORTCUT_CONTENT_ITEM_ID'",
+                SHORTCUT_CONTENT_PAYLOAD,
+            )
+        }
+    }
+
+    @Test
+    fun versionFiveWidgetCleanupMigrationPreservesBindingAndAddsRecoverableState() = runTest {
+        migrationHelper.createDatabase(5).closing { connection ->
+            connection.execSQL(
+                "INSERT INTO configuration_documents " +
+                    "(id, configType, schemaVersion, encoded, lastMigrationErrorCode) VALUES " +
+                    "('$CHILD_CONFIGURATION_ID', '$CHILD_CONFIG_TYPE', 2, " +
+                    "'$CHILD_CONFIGURATION_PAYLOAD', NULL)",
+            )
+            connection.execSQL(
+                "INSERT INTO module_instances " +
+                    "(id, contributionId, configurationDocumentId, lifecycle, quarantineReasonCode, " +
+                    "quarantineReasonMessage, quarantineOrigin) VALUES " +
+                    "('$CHILD_INSTANCE_ID', '$BLOCK_ID', '$CHILD_CONFIGURATION_ID', " +
+                    "'active', NULL, NULL, 'OTHER')",
+            )
+            connection.execSQL(
+                "INSERT INTO widget_placements " +
+                    "(moduleInstanceId, profileSerial, providerPackageName, providerClassName, " +
+                    "appWidgetId, bindingState, encodedOptions) VALUES " +
+                    "('$CHILD_INSTANCE_ID', 10, 'org.example.widget', " +
+                    "'org.example.widget.Provider', 42, 'BOUND', '$WIDGET_OPTIONS')",
+            )
+        }
+
+        migrationHelper.runMigrationsAndValidate(
+            6,
+            listOf(LauncherMigration5To6),
+        ).closing { connection ->
+            assertTextQuery(
+                connection,
+                "SELECT cleanupState FROM widget_placements WHERE appWidgetId = 42",
+                "NONE",
+            )
+            assertTextQuery(
+                connection,
+                "SELECT encodedOptions FROM widget_placements WHERE appWidgetId = 42",
+                WIDGET_OPTIONS,
             )
         }
     }
@@ -431,6 +562,165 @@ class RoomLauncherStoreInstrumentedTest {
         )
         assertEquals(committed.state, reopened.read())
         reopened.close()
+    }
+
+    @Test
+    fun duplicateShortcutPlacementsAndFolderOrderSurviveCloseAndReopen() = runTest {
+        val store = openStore()
+        val target = ShortcutTarget(
+            ProfileSerial.of(0),
+            PackageName.parse("org.example.mail"),
+            ShortcutId.parse("compose"),
+        )
+        val before = store.commit(
+            LauncherTransaction(
+                StoreRevision.ZERO,
+                listOf(LauncherEdit.Bootstrap(install("start", 0, 0))),
+            ),
+        ).let { it as CommitResult.Committed }.state
+        val firstId = ContentItemId.parse("org.quicklauncher.content/compose-one")
+        val secondId = ContentItemId.parse("org.quicklauncher.content/compose-two")
+        val folderId = ContentItemId.parse("org.quicklauncher.content/compose-folder")
+        val result = store.commit(
+            LauncherTransaction(
+                before.revision,
+                listOf(
+                    LauncherEdit.CreateShortcutPlacement(
+                        ContentItemRecord.shortcut(
+                            firstId,
+                            "opaque-one",
+                            target,
+                        ),
+                    ),
+                    LauncherEdit.CreateShortcutPlacement(
+                        ContentItemRecord.shortcut(
+                            secondId,
+                            "opaque-two",
+                            target,
+                        ),
+                    ),
+                    LauncherEdit.CreateFolder(
+                        ContentItemRecord(folderId, ContentItemKind.FOLDER, "folder-opaque"),
+                        listOf(secondId, firstId),
+                    ),
+                ),
+            ),
+        ) as CommitResult.Committed
+        store.close()
+
+        val reopened = openStore()
+        try {
+            assertEquals(result.state, reopened.read())
+            assertEquals(2, reopened.read().contentItems.count { it.shortcutTarget == target })
+            assertEquals(
+                listOf(secondId, firstId),
+                reopened.read().folderMembers.filter { it.folderId == folderId }.map { it.memberId },
+            )
+        } finally {
+            reopened.close()
+        }
+    }
+
+    @Test
+    fun widgetPendingFailureAndCleanupStatesSurviveCloseAndReopen() = runTest {
+        var store = openStore()
+        val root = store.commit(
+            LauncherTransaction(
+                StoreRevision.ZERO,
+                listOf(LauncherEdit.Bootstrap(install("start", 0, 0))),
+            ),
+        ).let { it as CommitResult.Committed }.state
+        val childId = ModuleInstanceId.parse(CHILD_INSTANCE_ID)
+        val childConfigurationId = ConfigurationDocumentId.parse(CHILD_CONFIGURATION_ID)
+        val block = NewPlacedModule(
+            instance = ModuleInstanceRecord(
+                childId,
+                ContributionId.parse(BLOCK_ID),
+                childConfigurationId,
+            ),
+            configuration = StoredConfigurationDocument(
+                childConfigurationId,
+                ConfigurationDocument(
+                    ConfigTypeId.parse(CHILD_CONFIG_TYPE),
+                    SchemaVersion.of(1),
+                    EncodedConfiguration.of(CHILD_CONFIGURATION_PAYLOAD),
+                ),
+            ),
+            placement = PlacementRecord(
+                PlacementId.parse(PLACEMENT_ID),
+                root.destinationLayouts.single().layoutInstanceId,
+                root.destinationLayouts.single().layoutInstanceId,
+                StableKey.parse("main"),
+                childId,
+                0,
+                EncodedPlacementData.of(RAW_PLACEMENT),
+                1,
+            ),
+        )
+        val placed = store.commit(
+            LauncherTransaction(root.revision, listOf(LauncherEdit.CommitDrop(block))),
+        ).let { it as CommitResult.Committed }.state
+        val pending = WidgetPlacementRecord(
+            moduleInstanceId = childId,
+            appWidgetId = 51,
+            providerPackage = PackageName.parse("org.example.widget"),
+            providerClassName = "org.example.widget.Provider",
+            profile = ProfileSerial.of(0),
+            intendedWidthDp = 240,
+            intendedHeightDp = 120,
+            bindState = WidgetBindState.PENDING,
+            restoreState = WidgetRestoreState.READY,
+        )
+        store.commit(
+            LauncherTransaction(placed.revision, listOf(LauncherEdit.BeginWidgetBinding(pending))),
+        ).let { it as CommitResult.Committed }
+        store.close()
+
+        store = openStore()
+        assertEquals(WidgetBindState.PENDING, store.read().widgetPlacements.single().bindState)
+        val cleanup = store.commit(
+            LauncherTransaction(
+                store.read().revision,
+                listOf(LauncherEdit.BeginWidgetDeletion(childId)),
+            ),
+        ).let { it as CommitResult.Committed }.state
+        assertEquals(WidgetCleanupState.DELETE_PENDING, cleanup.widgetPlacements.single().cleanupState)
+        store.close()
+
+        store = openStore()
+        assertEquals(WidgetCleanupState.DELETE_PENDING, store.read().widgetPlacements.single().cleanupState)
+        store.commit(
+            LauncherTransaction(store.read().revision, listOf(LauncherEdit.FailWidgetBinding(childId))),
+        ).let { it as CommitResult.Committed }
+        store.close()
+
+        store = openStore()
+        val failed = store.read().widgetPlacements.single()
+        assertEquals(WidgetBindState.FAILED, failed.bindState)
+        assertEquals(null, failed.appWidgetId)
+        val reboundPending = pending.copy(appWidgetId = 52)
+        val rebound = store.commit(
+            LauncherTransaction(
+                store.read().revision,
+                listOf(
+                    LauncherEdit.BeginWidgetBinding(reboundPending),
+                    LauncherEdit.CompleteWidgetBinding(childId),
+                    LauncherEdit.BeginWidgetInvalidation(childId),
+                ),
+            ),
+        ).let { it as CommitResult.Committed }.state
+        assertEquals(WidgetCleanupState.REBIND_PENDING, rebound.widgetPlacements.single().cleanupState)
+        store.close()
+
+        store = openStore()
+        try {
+            val restored = store.read().widgetPlacements.single()
+            assertEquals(WidgetBindState.BOUND, restored.bindState)
+            assertEquals(WidgetCleanupState.REBIND_PENDING, restored.cleanupState)
+            assertEquals(52, restored.appWidgetId)
+        } finally {
+            store.close()
+        }
     }
 
     @Test
@@ -711,6 +1001,15 @@ class RoomLauncherStoreInstrumentedTest {
         connection.execSQL(
             "INSERT INTO store_metadata (singletonKey, startDestinationId, revision) VALUES " +
                 "(1, '$DESTINATION_ID', 7)",
+        )
+    }
+
+    private fun insertVersionThreeState(connection: SQLiteConnection) {
+        connection.execSQL(
+            "INSERT INTO content_items " +
+                "(id, kind, profileSerial, packageName, encodedSemanticData) VALUES " +
+                "('$SHORTCUT_CONTENT_ITEM_ID', 'SHORTCUT', 10, 'org.example.app', " +
+                "'$SHORTCUT_CONTENT_PAYLOAD')",
         )
     }
 

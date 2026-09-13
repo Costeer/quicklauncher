@@ -60,6 +60,7 @@ class FileLauncherPreferencesStoreTest {
             assertEquals(null, store.read().themeProfileId)
             store.setThemeProfile(themeProfileId)
             store.setNotificationStyle(NotificationStyle.APPROXIMATE_COUNT)
+            store.setPrivateSpaceVisibility(PrivateSpaceVisibility.HIDDEN)
             val updated = store.setOnboardingState(OnboardingState.COMPLETED)
 
             assertEquals(GestureMode.EDGE_ACTIVATION, updated.gestureMode)
@@ -68,6 +69,7 @@ class FileLauncherPreferencesStoreTest {
             assertEquals(themeProfileId, updated.themeProfileId)
             assertEquals(NotificationStyle.APPROXIMATE_COUNT, updated.notificationStyle)
             assertEquals(OnboardingState.COMPLETED, updated.onboardingState)
+            assertEquals(PrivateSpaceVisibility.HIDDEN, updated.privateSpaceVisibility)
             assertEquals(updated, store.read())
             assertEquals(updated, store.state.first())
         } finally {
@@ -131,6 +133,8 @@ class FileLauncherPreferencesStoreTest {
 
         original.setThemeProfile(themeProfileId)
         original.setOnboardingState(OnboardingState.COMPLETED)
+        original.setNotificationStyle(NotificationStyle.APPROXIMATE_COUNT)
+        original.setPrivateSpaceVisibility(PrivateSpaceVisibility.HIDDEN)
         original.close()
         original.close()
 
@@ -152,8 +156,29 @@ class FileLauncherPreferencesStoreTest {
             val restored = reopened.read()
             assertEquals(themeProfileId, restored.themeProfileId)
             assertEquals(OnboardingState.COMPLETED, restored.onboardingState)
+            assertEquals(NotificationStyle.APPROXIMATE_COUNT, restored.notificationStyle)
+            assertEquals(PrivateSpaceVisibility.HIDDEN, restored.privateSpaceVisibility)
         } finally {
             reopened.close()
+        }
+    }
+
+    @Test
+    fun legacyProtoWithoutPrivateSpaceVisibilityDefaultsToVisible() = runTest {
+        val file = File(temporaryFolder.root, "launcher_preferences.pb")
+        LauncherPreferencesProtoCodec.defaultValue.toBuilder()
+            .clearPrivateSpaceVisibility()
+            .build()
+            .writeTo(file.outputStream())
+        val store = FileLauncherPreferencesStore.open(
+            file,
+            StandardTestDispatcher(testScheduler),
+        )
+
+        try {
+            assertEquals(PrivateSpaceVisibility.VISIBLE, store.read().privateSpaceVisibility)
+        } finally {
+            store.close()
         }
     }
 

@@ -141,6 +141,18 @@ subprojects {
     }
 }
 
+// These suites drive foreground system UI on the same managed device. Gradle may otherwise run
+// them concurrently, allowing one suite to steal Home-role or gesture focus from another.
+project(":host:runtime").tasks.matching { it.name == "connectedDebugAndroidTest" }.configureEach {
+    mustRunAfter(":host:platform:connectedDebugAndroidTest")
+}
+project(":host:editor").tasks.matching { it.name == "connectedDebugAndroidTest" }.configureEach {
+    mustRunAfter(":host:runtime:connectedDebugAndroidTest")
+}
+project(":app").tasks.matching { it.name == "connectedStableDebugAndroidTest" }.configureEach {
+    mustRunAfter(":host:editor:connectedDebugAndroidTest")
+}
+
 tasks.register("checkModuleBoundaries") {
     group = "verification"
     description = "Checks project dependencies against the architecture module rules."
@@ -204,6 +216,47 @@ tasks.register("checkModuleBoundaries") {
 
         check(violations.isEmpty()) {
             "Module boundary violations:\n${violations.joinToString("\n") { " - $it" }}"
+        }
+
+        val frameworkTypes = listOf(
+            "android.os.UserHandle",
+            "android.content.pm.LauncherApps",
+            "android.content.pm.LauncherActivityInfo",
+            "android.content.pm.LauncherUserInfo",
+            "android.content.pm.ShortcutInfo",
+            "android.appwidget.AppWidgetHost",
+            "android.appwidget.AppWidgetManager",
+            "android.appwidget.AppWidgetHostView",
+            "android.appwidget.AppWidgetProviderInfo",
+            "android.widget.RemoteViews",
+            "android.app.Notification",
+            "android.service.notification.StatusBarNotification",
+            "android.content.ComponentName",
+            "android.graphics.drawable.Drawable",
+            "android.content.Intent",
+        )
+        val frameworkOwners = subprojects.filter { owner ->
+            owner.path.startsWith(":contracts:") ||
+                owner.path.startsWith(":modules:") ||
+                owner.path == ":host:data" ||
+                owner.path == ":host:runtime" ||
+                owner.path == ":host:editor" ||
+                owner.path == ":host:settings"
+        }
+        val frameworkLeaks = frameworkOwners.flatMap { owner ->
+            owner.projectDir.resolve("src").walkTopDown()
+                .filter { it.isFile && it.extension == "kt" }
+                .flatMap { source ->
+                    val text = source.readText()
+                    frameworkTypes.asSequence()
+                        .filter(text::contains)
+                        .map { type -> "${source.relativeTo(rootDir)} -> $type" }
+                }
+                .toList()
+        }.distinct().sorted()
+        check(frameworkLeaks.isEmpty()) {
+            "Android framework types escaped :host:platform:\n" +
+                frameworkLeaks.joinToString("\n") { " - $it" }
         }
     }
 }

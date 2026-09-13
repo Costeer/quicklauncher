@@ -176,3 +176,13 @@ internal object LauncherMigration4To5 : Migration(4, 5) {
         )
     }
 }
+
+/** Records framework cleanup before deleting the durable widget placement. */
+internal object LauncherMigration5To6 : Migration(5, 6) {
+    override suspend fun migrate(connection: SQLiteConnection) {
+        connection.execSQL(
+            "ALTER TABLE widget_placements ADD COLUMN cleanupState " +
+                "TEXT NOT NULL DEFAULT 'NONE'",
+        )
+    }
+}

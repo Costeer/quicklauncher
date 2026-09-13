@@ -127,6 +127,10 @@ sealed interface SettingValue {
     class AppSelectionValue(values: Collection<ProfilePackageIdentity>) : SettingValue {
         val values: List<ProfilePackageIdentity> = immutableContractList(values)
     }
+
+    class ContentSelectionValue(values: Collection<ContentItemId>) : SettingValue {
+        val values: List<ContentItemId> = immutableContractList(values)
+    }
 }
 
 class CommandParameters(values: Map<StableKey, SettingValue>) {

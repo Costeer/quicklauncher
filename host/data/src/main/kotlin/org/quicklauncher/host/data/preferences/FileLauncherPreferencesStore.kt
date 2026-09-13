@@ -68,6 +68,10 @@ class FileLauncherPreferencesStore private constructor(
         state: OnboardingState,
     ): LauncherPreferences = update { it.copy(onboardingState = state) }
 
+    override suspend fun setPrivateSpaceVisibility(
+        visibility: PrivateSpaceVisibility,
+    ): LauncherPreferences = update { it.copy(privateSpaceVisibility = visibility) }
+
     override fun close() {
         if (closed.compareAndSet(false, true)) {
             scope.cancel()

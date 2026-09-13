@@ -20,7 +20,7 @@ import androidx.room3.RoomDatabase
         CrashMarkerEntity::class,
         StoreMetadataEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
     autoMigrations = [AutoMigration(from = 1, to = 2)],
 )

@@ -101,6 +101,28 @@ class DefaultAppCatalogTest {
     }
 
     @Test
+    fun `platform failure clears previously available profile metadata`() = runTest {
+        val work = profile(10, AppProfileKind.WORK)
+        val platform = FakeAppPlatform(
+            AppPlatformSnapshot(
+                profiles = listOf(work),
+                activities = listOf(activity(work.serial, "org.example.work", "Work")),
+            ),
+        )
+        val catalog = DefaultAppCatalog(platform, FakeOverrideSource(), backgroundScope)
+        catalog.refresh()
+        assertEquals("Work", catalog.state.value.profiles.single().apps.single().label)
+        platform.snapshotFailure = IllegalStateException("profile unavailable")
+
+        catalog.refresh()
+
+        assertEquals(AppCatalogStatus.ERROR, catalog.state.value.status)
+        assertTrue(catalog.state.value.profiles.isEmpty())
+        assertEquals("app_catalog_refresh_failed", catalog.state.value.errorCode)
+        catalog.close()
+    }
+
+    @Test
     fun `cold override failure fails closed instead of exposing unfiltered platform apps`() = runTest {
         val personal = profile(0, AppProfileKind.PERSONAL)
         val alpha = activity(personal.serial, "org.example.alpha", "Alpha")
@@ -205,9 +227,11 @@ class DefaultAppCatalogTest {
         val launches = mutableListOf<AppActivityIdentity>()
         var snapshotReads = 0
         var closed = false
+        var snapshotFailure: RuntimeException? = null
 
         override suspend fun snapshot(): AppPlatformSnapshot {
             snapshotReads += 1
+            snapshotFailure?.let { throw it }
             return nextSnapshot
         }
 

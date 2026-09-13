@@ -237,6 +237,26 @@ private class MutableStoreState(
         is LauncherEdit.CompleteStartupRestore -> completeStartupRestore(edit)
         is LauncherEdit.QuarantineRenderer -> quarantineRenderer(edit)
         is LauncherEdit.RetryRenderer -> retryRenderer(edit)
+        is LauncherEdit.BeginWidgetBinding -> beginWidgetBinding(edit)
+        is LauncherEdit.CompleteWidgetBinding -> completeWidgetBinding(edit)
+        is LauncherEdit.CancelWidgetBinding -> cancelWidgetBinding(edit)
+        is LauncherEdit.FailWidgetBinding -> failWidgetBinding(edit)
+        is LauncherEdit.UpdateWidgetSize -> updateWidgetSize(edit)
+        is LauncherEdit.ReplaceRestoredWidgetId -> replaceRestoredWidgetId(edit)
+        is LauncherEdit.BeginWidgetDeletion -> beginWidgetDeletion(edit)
+        is LauncherEdit.CompleteWidgetDeletion -> completeWidgetDeletion(edit)
+        is LauncherEdit.BeginWidgetInvalidation -> beginWidgetInvalidation(edit)
+        is LauncherEdit.CompleteWidgetInvalidation -> completeWidgetInvalidation(edit)
+        is LauncherEdit.DeleteWidgetPlacement -> deleteWidgetPlacement(edit)
+        is LauncherEdit.CreateShortcutPlacement -> createShortcutPlacement(edit)
+        is LauncherEdit.RemoveShortcutPlacement -> removeShortcutPlacement(edit)
+        is LauncherEdit.CreateFolder -> createFolder(edit)
+        is LauncherEdit.RenameFolder -> renameFolder(edit)
+        is LauncherEdit.SetFolderMembers -> setFolderMembers(edit)
+        is LauncherEdit.SetFolderMembership -> setFolderMembership(edit)
+        is LauncherEdit.DeleteFolder -> deleteFolder(edit)
+        is LauncherEdit.PutAppOverride -> putAppOverride(edit)
+        is LauncherEdit.RemoveAppOverride -> removeAppOverride(edit)
     }
 
     fun validate(): StoreRejection? {
@@ -397,6 +417,29 @@ private class MutableStoreState(
             widgetPlacements.size
         ) {
             return duplicate("widget module instance")
+        }
+        if (widgetPlacements.any {
+                it.cleanupState != WidgetCleanupState.NONE && it.appWidgetId == null
+            }
+        ) {
+            return invalidReference("Pending widget cleanup must retain its Android widget ID")
+        }
+        if (widgetPlacements.any { placement ->
+                when (placement.bindState) {
+                    WidgetBindState.BOUND ->
+                        placement.appWidgetId == null || placement.restoreState != WidgetRestoreState.READY
+                    WidgetBindState.FAILED ->
+                        placement.appWidgetId != null || placement.cleanupState != WidgetCleanupState.NONE
+                    WidgetBindState.PENDING ->
+                        placement.appWidgetId == null &&
+                            placement.restoreState != WidgetRestoreState.REBIND_REQUIRED
+                } || (
+                    placement.cleanupState == WidgetCleanupState.REBIND_PENDING &&
+                        placement.bindState != WidgetBindState.BOUND
+                    )
+            }
+        ) {
+            return recoveryStateMismatch("Widget placement state is internally inconsistent")
         }
         if (themeProfiles.map(ThemeProfileRecord::id).toSet().size != themeProfiles.size) {
             return duplicate("theme profile")
@@ -591,6 +634,11 @@ private class MutableStoreState(
             .map(DestinationLayoutRecord::layoutInstanceId)
             .toSet()
         val removedInstances = instancesInTrees(roots)
+        if (widgetPlacements.any { it.moduleInstanceId in removedInstances && it.appWidgetId != null }) {
+            return recoveryStateMismatch(
+                "Destination removal requires allocated widget IDs to be cleaned up first",
+            )
+        }
         destinations.remove(edit.destinationId)
         destinationLayouts.removeAll { it.destinationId == edit.destinationId }
         placements.entries.removeAll {
@@ -678,6 +726,11 @@ private class MutableStoreState(
         if (!edit.confirmed) return confirmationRequired("Retained layout removal requires confirmation")
 
         val removedInstances = instancesInTrees(setOf(retained.layoutInstanceId))
+        if (widgetPlacements.any { it.moduleInstanceId in removedInstances && it.appWidgetId != null }) {
+            return recoveryStateMismatch(
+                "Retained layout removal requires allocated widget IDs to be cleaned up first",
+            )
+        }
         destinationLayouts.remove(retained)
         placements.entries.removeAll {
             it.value.layoutInstanceId == retained.layoutInstanceId ||
@@ -900,6 +953,7 @@ private class MutableStoreState(
                 appWidgetId = null,
                 bindState = WidgetBindState.PENDING,
                 restoreState = WidgetRestoreState.REBIND_REQUIRED,
+                cleanupState = WidgetCleanupState.NONE,
             )
         }
         return null
@@ -1005,6 +1059,11 @@ private class MutableStoreState(
         val root = placements[edit.placementId]
             ?: return notFound("Placement '${edit.placementId}' does not exist")
         val removedInstances = subtreeInstances(root.childInstanceId)
+        if (widgetPlacements.any { it.moduleInstanceId in removedInstances && it.appWidgetId != null }) {
+            return recoveryStateMismatch(
+                "Placement removal requires allocated widget IDs to be cleaned up first",
+            )
+        }
         val removedPlacements = placements.values.filter { it.childInstanceId in removedInstances }
         removedPlacements.forEach { placements.remove(it.id) }
         compactAfterRemoval(root)
@@ -1086,6 +1145,301 @@ private class MutableStoreState(
         moduleInstances[instance.id] = instance.copy(status = ModuleInstanceStatus.Active)
         crashMarkers.removeAll { it.moduleInstanceId == instance.id }
         return null
+    }
+
+    private fun beginWidgetBinding(edit: LauncherEdit.BeginWidgetBinding): StoreRejection? {
+        val placement = edit.placement
+        if (placement.moduleInstanceId !in moduleInstances) {
+            return notFound("Widget instance '${placement.moduleInstanceId}' does not exist")
+        }
+        if (
+            placement.appWidgetId == null ||
+            placement.bindState != WidgetBindState.PENDING ||
+            placement.restoreState != WidgetRestoreState.READY ||
+            placement.cleanupState != WidgetCleanupState.NONE
+        ) {
+            return recoveryStateMismatch("A widget binding must begin with one allocated pending ID")
+        }
+        if (widgetPlacements.any {
+                it.appWidgetId == placement.appWidgetId && it.moduleInstanceId != placement.moduleInstanceId
+            }
+        ) {
+            return duplicate("Android widget ID")
+        }
+        val existing = widgetPlacements.indexOfFirst { it.moduleInstanceId == placement.moduleInstanceId }
+        if (existing >= 0) {
+            val current = widgetPlacements[existing]
+            if (current.appWidgetId != null || current.bindState == WidgetBindState.BOUND) {
+                return recoveryStateMismatch("Widget instance already owns an allocated ID")
+            }
+            widgetPlacements[existing] = placement
+        } else {
+            widgetPlacements += placement
+        }
+        return null
+    }
+
+    private fun completeWidgetBinding(edit: LauncherEdit.CompleteWidgetBinding): StoreRejection? {
+        val index = widgetPlacements.indexOfFirst { it.moduleInstanceId == edit.moduleInstanceId }
+        if (index < 0) return notFound("Widget placement '${edit.moduleInstanceId}' does not exist")
+        val current = widgetPlacements[index]
+        if (
+            current.bindState != WidgetBindState.PENDING ||
+            current.appWidgetId == null ||
+            current.cleanupState != WidgetCleanupState.NONE
+        ) {
+            return recoveryStateMismatch("Only an allocated pending widget can complete binding")
+        }
+        widgetPlacements[index] = current.copy(
+            bindState = WidgetBindState.BOUND,
+            restoreState = WidgetRestoreState.READY,
+        )
+        return null
+    }
+
+    private fun cancelWidgetBinding(edit: LauncherEdit.CancelWidgetBinding): StoreRejection? {
+        val current = widgetPlacements.singleOrNull { it.moduleInstanceId == edit.moduleInstanceId }
+            ?: return notFound("Widget placement '${edit.moduleInstanceId}' does not exist")
+        if (
+            current.bindState != WidgetBindState.PENDING ||
+            current.appWidgetId == null ||
+            current.cleanupState != WidgetCleanupState.NONE
+        ) {
+            return recoveryStateMismatch("Only a pending widget binding can be cancelled")
+        }
+        widgetPlacements.remove(current)
+        return null
+    }
+
+    private fun failWidgetBinding(edit: LauncherEdit.FailWidgetBinding): StoreRejection? {
+        val index = widgetPlacements.indexOfFirst { it.moduleInstanceId == edit.moduleInstanceId }
+        if (index < 0) return notFound("Widget placement '${edit.moduleInstanceId}' does not exist")
+        val current = widgetPlacements[index]
+        if (current.bindState != WidgetBindState.PENDING || current.appWidgetId == null) {
+            return recoveryStateMismatch("Only a pending widget binding can fail")
+        }
+        widgetPlacements[index] = current.copy(
+            appWidgetId = null,
+            bindState = WidgetBindState.FAILED,
+            cleanupState = WidgetCleanupState.NONE,
+        )
+        return null
+    }
+
+    private fun updateWidgetSize(edit: LauncherEdit.UpdateWidgetSize): StoreRejection? {
+        val index = widgetPlacements.indexOfFirst { it.moduleInstanceId == edit.moduleInstanceId }
+        if (index < 0) return notFound("Widget placement '${edit.moduleInstanceId}' does not exist")
+        widgetPlacements[index] = widgetPlacements[index].copy(
+            intendedWidthDp = edit.widthDp,
+            intendedHeightDp = edit.heightDp,
+        )
+        return null
+    }
+
+    private fun replaceRestoredWidgetId(edit: LauncherEdit.ReplaceRestoredWidgetId): StoreRejection? {
+        val index = widgetPlacements.indexOfFirst { it.moduleInstanceId == edit.moduleInstanceId }
+        if (index < 0) return notFound("Restored widget placement '${edit.moduleInstanceId}' does not exist")
+        val current = widgetPlacements[index]
+        if (
+            current.restoreState != WidgetRestoreState.REBIND_REQUIRED ||
+            current.appWidgetId != null ||
+            current.cleanupState != WidgetCleanupState.NONE
+        ) {
+            return recoveryStateMismatch("Only a restored pending placement can receive a replacement ID")
+        }
+        if (widgetPlacements.any { it.appWidgetId == edit.appWidgetId }) {
+            return duplicate("Android widget ID")
+        }
+        widgetPlacements[index] = current.copy(
+            appWidgetId = edit.appWidgetId,
+            bindState = WidgetBindState.PENDING,
+        )
+        return null
+    }
+
+    private fun deleteWidgetPlacement(edit: LauncherEdit.DeleteWidgetPlacement): StoreRejection? {
+        val current = widgetPlacements.singleOrNull { it.moduleInstanceId == edit.moduleInstanceId }
+            ?: return notFound("Widget placement '${edit.moduleInstanceId}' does not exist")
+        if (current.appWidgetId != null || current.cleanupState != WidgetCleanupState.NONE) {
+            return recoveryStateMismatch("Allocated widget IDs must use coordinated framework cleanup")
+        }
+        widgetPlacements.remove(current)
+        return null
+    }
+
+    private fun beginWidgetDeletion(edit: LauncherEdit.BeginWidgetDeletion): StoreRejection? {
+        val index = widgetPlacements.indexOfFirst { it.moduleInstanceId == edit.moduleInstanceId }
+        if (index < 0) return notFound("Widget placement '${edit.moduleInstanceId}' does not exist")
+        val current = widgetPlacements[index]
+        if (current.appWidgetId == null) {
+            return recoveryStateMismatch("Only a widget with an allocated ID needs framework cleanup")
+        }
+        widgetPlacements[index] = current.copy(cleanupState = WidgetCleanupState.DELETE_PENDING)
+        return null
+    }
+
+    private fun completeWidgetDeletion(edit: LauncherEdit.CompleteWidgetDeletion): StoreRejection? {
+        val current = widgetPlacements.singleOrNull { it.moduleInstanceId == edit.moduleInstanceId }
+            ?: return notFound("Widget placement '${edit.moduleInstanceId}' does not exist")
+        if (current.cleanupState != WidgetCleanupState.DELETE_PENDING) {
+            return recoveryStateMismatch("Widget framework cleanup has not begun")
+        }
+        widgetPlacements.remove(current)
+        return null
+    }
+
+    private fun beginWidgetInvalidation(edit: LauncherEdit.BeginWidgetInvalidation): StoreRejection? {
+        val index = widgetPlacements.indexOfFirst { it.moduleInstanceId == edit.moduleInstanceId }
+        if (index < 0) return notFound("Widget placement '${edit.moduleInstanceId}' does not exist")
+        val current = widgetPlacements[index]
+        if (
+            current.bindState != WidgetBindState.BOUND ||
+            current.appWidgetId == null ||
+            current.cleanupState != WidgetCleanupState.NONE
+        ) {
+            return recoveryStateMismatch("Only a bound widget can begin provider invalidation")
+        }
+        widgetPlacements[index] = current.copy(cleanupState = WidgetCleanupState.REBIND_PENDING)
+        return null
+    }
+
+    private fun completeWidgetInvalidation(edit: LauncherEdit.CompleteWidgetInvalidation): StoreRejection? {
+        val index = widgetPlacements.indexOfFirst { it.moduleInstanceId == edit.moduleInstanceId }
+        if (index < 0) return notFound("Widget placement '${edit.moduleInstanceId}' does not exist")
+        val current = widgetPlacements[index]
+        if (current.cleanupState != WidgetCleanupState.REBIND_PENDING) {
+            return recoveryStateMismatch("Widget invalidation cleanup has not begun")
+        }
+        widgetPlacements[index] = current.copy(
+            appWidgetId = null,
+            bindState = WidgetBindState.PENDING,
+            restoreState = WidgetRestoreState.REBIND_REQUIRED,
+            cleanupState = WidgetCleanupState.NONE,
+        )
+        return null
+    }
+
+    private fun createShortcutPlacement(edit: LauncherEdit.CreateShortcutPlacement): StoreRejection? {
+        if (edit.item.kind != ContentItemKind.SHORTCUT || edit.item.shortcutTarget == null) {
+            return invalidReference("Shortcut placement must contain a structural shortcut target")
+        }
+        if (contentItems.any { it.id == edit.item.id }) return duplicate("content item")
+        contentItems += edit.item
+        return null
+    }
+
+    private fun removeShortcutPlacement(edit: LauncherEdit.RemoveShortcutPlacement): StoreRejection? {
+        val item = contentItems.singleOrNull { it.id == edit.contentItemId }
+            ?: return notFound("Shortcut content '${edit.contentItemId}' does not exist")
+        if (item.kind != ContentItemKind.SHORTCUT) {
+            return invalidReference("Only shortcut content can use shortcut removal")
+        }
+        contentItems.remove(item)
+        removeMembershipsAndCompact { it.memberId == item.id }
+        return null
+    }
+
+    private fun createFolder(edit: LauncherEdit.CreateFolder): StoreRejection? {
+        if (edit.folder.kind != ContentItemKind.FOLDER) {
+            return invalidReference("Folder creation requires folder content")
+        }
+        if (contentItems.any { it.id == edit.folder.id }) return duplicate("content item")
+        if (edit.members.toSet().size != edit.members.size) return duplicate("folder member")
+        if (edit.members.any { member -> contentItems.none { it.id == member } }) {
+            return invalidReference("Folder creation refers to missing content")
+        }
+        contentItems += edit.folder
+        edit.members.forEachIndexed { index, member ->
+            folderMembers += FolderMemberRecord(edit.folder.id, member, index)
+        }
+        return null
+    }
+
+    private fun renameFolder(edit: LauncherEdit.RenameFolder): StoreRejection? {
+        if (edit.encoded.isBlank()) return invalidReference("Folder data must not be blank")
+        val index = contentItems.indexOfFirst { it.id == edit.folderId && it.kind == ContentItemKind.FOLDER }
+        if (index < 0) return notFound("Folder '${edit.folderId}' does not exist")
+        contentItems[index] = ContentItemRecord(edit.folderId, ContentItemKind.FOLDER, edit.encoded)
+        return null
+    }
+
+    private fun setFolderMembers(edit: LauncherEdit.SetFolderMembers): StoreRejection? {
+        if (contentItems.none { it.id == edit.folderId && it.kind == ContentItemKind.FOLDER }) {
+            return notFound("Folder '${edit.folderId}' does not exist")
+        }
+        if (edit.members.toSet().size != edit.members.size) return duplicate("folder member")
+        if (edit.members.any { member -> contentItems.none { it.id == member } }) {
+            return invalidReference("Folder membership refers to missing content")
+        }
+        folderMembers.removeAll { it.folderId == edit.folderId }
+        edit.members.forEachIndexed { index, member ->
+            folderMembers += FolderMemberRecord(edit.folderId, member, index)
+        }
+        return null
+    }
+
+    private fun setFolderMembership(edit: LauncherEdit.SetFolderMembership): StoreRejection? {
+        if (contentItems.none { it.id == edit.folderId && it.kind == ContentItemKind.FOLDER }) {
+            return notFound("Folder '${edit.folderId}' does not exist")
+        }
+        val existingItem = contentItems.singleOrNull { it.id == edit.member.id }
+        if (existingItem != null && existingItem != edit.member) {
+            return invalidReference("Content identity '${edit.member.id}' changed while editing a folder")
+        }
+        val existingMember = folderMembers.singleOrNull {
+            it.folderId == edit.folderId && it.memberId == edit.member.id
+        }
+        if (edit.included) {
+            if (existingMember != null) return duplicate("folder member")
+            if (existingItem == null) contentItems += edit.member
+            val index = folderMembers.count { it.folderId == edit.folderId }
+            folderMembers += FolderMemberRecord(edit.folderId, edit.member.id, index)
+        } else {
+            if (existingMember == null) return notFound("Folder membership does not exist")
+            folderMembers.remove(existingMember)
+            val retained = folderMembers.filter { it.folderId == edit.folderId }.sortedBy { it.index }
+            folderMembers.removeAll { it.folderId == edit.folderId }
+            retained.forEachIndexed { index, member -> folderMembers += member.copy(index = index) }
+        }
+        return null
+    }
+
+    private fun deleteFolder(edit: LauncherEdit.DeleteFolder): StoreRejection? {
+        if (!edit.confirmed) return confirmationRequired("Folder deletion requires confirmation")
+        val folder = contentItems.singleOrNull { it.id == edit.folderId && it.kind == ContentItemKind.FOLDER }
+            ?: return notFound("Folder '${edit.folderId}' does not exist")
+        contentItems.remove(folder)
+        folderMembers.removeAll { it.folderId == edit.folderId }
+        removeMembershipsAndCompact { it.memberId == edit.folderId }
+        return null
+    }
+
+    private fun removeMembershipsAndCompact(remove: (FolderMemberRecord) -> Boolean) {
+        val affectedFolders = folderMembers.filter(remove).map(FolderMemberRecord::folderId).toSet()
+        folderMembers.removeAll(remove)
+        affectedFolders.forEach { folderId ->
+            val retained = folderMembers.filter { it.folderId == folderId }.sortedBy { it.index }
+            folderMembers.removeAll { it.folderId == folderId }
+            retained.forEachIndexed { index, member -> folderMembers += member.copy(index = index) }
+        }
+    }
+
+    private fun putAppOverride(edit: LauncherEdit.PutAppOverride): StoreRejection? {
+        appOverrides.removeAll {
+            it.profile == edit.override.profile &&
+                it.packageName == edit.override.packageName &&
+                it.activityName == edit.override.activityName
+        }
+        appOverrides += edit.override
+        return null
+    }
+
+    private fun removeAppOverride(edit: LauncherEdit.RemoveAppOverride): StoreRejection? {
+        val removed = appOverrides.removeAll {
+            it.profile == edit.profile && it.packageName == edit.packageName &&
+                it.activityName == edit.activityName
+        }
+        return if (removed) null else notFound("App override does not exist")
     }
 
     private fun validateInstall(install: DestinationInstall): StoreRejection? {

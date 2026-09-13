@@ -6,6 +6,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.unit.Constraints
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.launch
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import kotlinx.serialization.Serializable
@@ -106,6 +109,8 @@ object SingleBlockLayoutCodec : ConfigurationCodec<SingleBlockLayoutConfiguratio
             "org.quicklauncher.block/favorites",
             "org.quicklauncher.block/folder",
             "org.quicklauncher.block/clock-date",
+            "org.quicklauncher.block/search",
+            "org.quicklauncher.block/widget",
         ],
         maximumChildren = 24,
         allowedScrollAxes = [ScrollAxisSpec.HORIZONTAL, ScrollAxisSpec.VERTICAL],
@@ -135,6 +140,8 @@ object GridLayout : LayoutContribution<GridLayoutConfiguration> {
             "org.quicklauncher.block/favorites",
             "org.quicklauncher.block/folder",
             "org.quicklauncher.block/clock-date",
+            "org.quicklauncher.block/search",
+            "org.quicklauncher.block/widget",
         ],
         allowedScrollAxes = [ScrollAxisSpec.HORIZONTAL, ScrollAxisSpec.VERTICAL],
     )],
@@ -149,6 +156,7 @@ object SingleBlockLayout : LayoutContribution<SingleBlockLayoutConfiguration> {
 private class GridLayoutSession(
     private val context: ContributionContext<GridLayoutConfiguration>,
 ) : LayoutSession {
+    private val ownedJob: Job = context.instanceScope.launch { awaitCancellation() }
     override var isClosed = false
         private set
 
@@ -198,6 +206,7 @@ private class GridLayoutSession(
     }
 
     override fun close() {
+        ownedJob.cancel()
         isClosed = true
     }
 }
@@ -205,6 +214,7 @@ private class GridLayoutSession(
 private class SingleBlockLayoutSession(
     private val context: ContributionContext<SingleBlockLayoutConfiguration>,
 ) : LayoutSession {
+    private val ownedJob: Job = context.instanceScope.launch { awaitCancellation() }
     override var isClosed = false
         private set
 
@@ -218,6 +228,7 @@ private class SingleBlockLayoutSession(
     }
 
     override fun close() {
+        ownedJob.cancel()
         isClosed = true
     }
 }
@@ -230,7 +241,7 @@ private data class GridPlacement(
 ) {
     companion object {
         private val JsonShape = Regex(
-            """\{\"column\":(\d+),\"row\":(\d+),\"columnSpan\":(\d+),\"rowSpan\":(\d+)}""",
+            """\{\"column\":(\d+),\"row\":(\d+),\"columnSpan\":(\d+),\"rowSpan\":(\d+)\}""",
         )
 
         fun decode(encoded: String, fallbackIndex: Int, columns: Int): GridPlacement {

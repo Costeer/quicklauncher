@@ -9,6 +9,7 @@ description = "Deterministic aggregate of production contribution registry fragm
 
 dependencies {
     api(project(":contracts:contribution"))
+    api(project(":contracts:domain"))
     implementation(project(":modules:layout:core"))
     implementation(project(":modules:block:core"))
     implementation(project(":modules:templates:core"))

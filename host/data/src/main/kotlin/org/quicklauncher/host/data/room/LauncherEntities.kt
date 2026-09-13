@@ -176,6 +176,7 @@ internal data class WidgetPlacementEntity(
     val providerClassName: String,
     val appWidgetId: Int?,
     val bindingState: String,
+    @ColumnInfo(defaultValue = "'NONE'") val cleanupState: String = "NONE",
     val encodedOptions: String,
 )
 

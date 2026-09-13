@@ -27,6 +27,7 @@ import org.quicklauncher.host.data.store.LauncherTransaction
 import org.quicklauncher.host.data.store.ModuleInstanceStatus
 import org.quicklauncher.host.data.store.ModuleQuarantineOrigin
 import org.quicklauncher.host.data.store.StoreRejection
+import org.quicklauncher.host.data.store.StoreRevision
 import org.quicklauncher.host.runtime.catalog.AppCatalog
 import org.quicklauncher.host.runtime.catalog.AppCatalogSnapshot
 import org.quicklauncher.host.runtime.catalog.AppCatalogStatus
@@ -84,6 +85,8 @@ data class LauncherApp(
     val identity: AppActivityIdentity,
     val label: String,
     val workProfile: Boolean,
+    val favorite: Boolean = false,
+    val collectionVisible: Boolean = true,
 )
 
 class LauncherRuntimeState(
@@ -98,6 +101,7 @@ class LauncherRuntimeState(
     destinations: Collection<LauncherDestination>,
     recoveryInstances: Collection<RecoveryInstance>,
     val errorCode: String? = null,
+    val storeRevision: StoreRevision = StoreRevision.ZERO,
 ) {
     val visibleApps: List<LauncherApp> = immutableList(visibleApps)
     val settingsApps: List<LauncherApp> = immutableList(settingsApps)
@@ -158,6 +162,12 @@ interface LauncherRuntime : AutoCloseable {
         instanceId: ModuleInstanceId,
         restore: suspend () -> Unit,
     ): RendererRestoreResult
+
+    /** Durably isolates the exact layout or block renderer that failed in a live composition. */
+    suspend fun reportRendererFailure(
+        instanceId: ModuleInstanceId,
+        failure: RuntimeException,
+    ): StoreRejection?
 }
 
 fun interface SelectedLayoutRestorer {
@@ -443,6 +453,20 @@ class DefaultLauncherRuntime(
         return result
     }
 
+    override suspend fun reportRendererFailure(
+        instanceId: ModuleInstanceId,
+        failure: RuntimeException,
+    ): StoreRejection? {
+        checkOpen()
+        return transitionMutex.withLock {
+            val rejection = recovery.reportRendererFailure(instanceId, failure)
+            val snapshot = store.read()
+            lastSnapshot = snapshot
+            publish(snapshot, mutableState.value.currentDestinationId)
+            rejection
+        }
+    }
+
     override fun close() {
         if (!closed.compareAndSet(false, true)) return
         scope.cancel()
@@ -456,11 +480,11 @@ class DefaultLauncherRuntime(
             buildState(
                 snapshot = snapshot,
                 currentDestinationId = current,
-                surface = if (prior.status == LauncherRuntimeStatus.LOADING) {
-                    homeSurface(snapshot, current)
-                } else {
-                    prior.surface
-                },
+                surface = if (
+                    prior.status == LauncherRuntimeStatus.LOADING ||
+                    prior.surface == LauncherSurface.SAFE_LAYOUT ||
+                    prior.surface == LauncherSurface.SELECTED_LAYOUT
+                ) homeSurface(snapshot, current) else prior.surface,
                 query = if (prior.status == LauncherRuntimeStatus.LOADING) "" else prior.localQuery,
                 roleState = roleCoordinator.refresh(),
                 catalogState = latestCatalog,
@@ -531,6 +555,7 @@ class DefaultLauncherRuntime(
             destinations = destinations,
             recoveryInstances = recoveries,
             errorCode = priorError,
+            storeRevision = snapshot.revision,
         )
     }
 
@@ -554,6 +579,7 @@ class DefaultLauncherRuntime(
         destinations = current.destinations,
         recoveryInstances = current.recoveryInstances,
         errorCode = current.errorCode,
+        storeRevision = current.storeRevision,
     )
 
     private fun projectApps(
@@ -567,12 +593,17 @@ class DefaultLauncherRuntime(
             .filter { it.available }
             .flatMap { profile ->
                 profile.apps.asSequence()
-                    .filter { app -> !ordinaryCollection || app.collectionVisible }
+                    .filter { app ->
+                        !ordinaryCollection || app.collectionVisible ||
+                            (normalizedQuery.isNotEmpty() && app.searchVisible)
+                    }
                     .map { app ->
                         LauncherApp(
                             identity = app.identity,
                             label = app.label,
                             workProfile = profile.kind == AppProfileKind.WORK,
+                            favorite = app.favorite,
+                            collectionVisible = app.collectionVisible,
                         )
                     }
             }
@@ -597,6 +628,7 @@ class DefaultLauncherRuntime(
                 destinations = current.destinations,
                 recoveryInstances = current.recoveryInstances,
                 errorCode = current.errorCode,
+                storeRevision = current.storeRevision,
             )
         }
     }

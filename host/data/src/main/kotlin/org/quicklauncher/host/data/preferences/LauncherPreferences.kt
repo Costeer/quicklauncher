@@ -26,6 +26,11 @@ enum class OnboardingState {
     COMPLETED,
 }
 
+enum class PrivateSpaceVisibility {
+    VISIBLE,
+    HIDDEN,
+}
+
 class LauncherPreferences private constructor(
     val gestureMode: GestureMode,
     enabledSearchProviders: Collection<ContributionId>,
@@ -33,6 +38,7 @@ class LauncherPreferences private constructor(
     val themeProfileId: ThemeProfileId?,
     val notificationStyle: NotificationStyle,
     val onboardingState: OnboardingState,
+    val privateSpaceVisibility: PrivateSpaceVisibility,
 ) {
     val enabledSearchProviders: Set<ContributionId> = immutableSet(enabledSearchProviders)
 
@@ -43,6 +49,7 @@ class LauncherPreferences private constructor(
         themeProfileId: ThemeProfileId? = this.themeProfileId,
         notificationStyle: NotificationStyle = this.notificationStyle,
         onboardingState: OnboardingState = this.onboardingState,
+        privateSpaceVisibility: PrivateSpaceVisibility = this.privateSpaceVisibility,
     ): LauncherPreferences = LauncherPreferences(
         gestureMode = gestureMode,
         enabledSearchProviders = enabledSearchProviders,
@@ -50,6 +57,7 @@ class LauncherPreferences private constructor(
         themeProfileId = themeProfileId,
         notificationStyle = notificationStyle,
         onboardingState = onboardingState,
+        privateSpaceVisibility = privateSpaceVisibility,
     )
 
     override fun equals(other: Any?): Boolean =
@@ -59,7 +67,8 @@ class LauncherPreferences private constructor(
             historyPolicy == other.historyPolicy &&
             themeProfileId == other.themeProfileId &&
             notificationStyle == other.notificationStyle &&
-            onboardingState == other.onboardingState
+            onboardingState == other.onboardingState &&
+            privateSpaceVisibility == other.privateSpaceVisibility
 
     override fun hashCode(): Int {
         var result = gestureMode.hashCode()
@@ -68,6 +77,7 @@ class LauncherPreferences private constructor(
         result = 31 * result + (themeProfileId?.hashCode() ?: 0)
         result = 31 * result + notificationStyle.hashCode()
         result = 31 * result + onboardingState.hashCode()
+        result = 31 * result + privateSpaceVisibility.hashCode()
         return result
     }
 
@@ -78,7 +88,8 @@ class LauncherPreferences private constructor(
             "historyPolicy=$historyPolicy, " +
             "themeProfileId=$themeProfileId, " +
             "notificationStyle=$notificationStyle, " +
-            "onboardingState=$onboardingState)"
+            "onboardingState=$onboardingState, " +
+            "privateSpaceVisibility=$privateSpaceVisibility)"
 
     companion object {
         val Default: LauncherPreferences = LauncherPreferences(
@@ -88,6 +99,7 @@ class LauncherPreferences private constructor(
             themeProfileId = null,
             notificationStyle = NotificationStyle.HIDDEN,
             onboardingState = OnboardingState.NOT_STARTED,
+            privateSpaceVisibility = PrivateSpaceVisibility.VISIBLE,
         )
 
         fun create(
@@ -97,6 +109,7 @@ class LauncherPreferences private constructor(
             themeProfileId: ThemeProfileId? = null,
             notificationStyle: NotificationStyle = NotificationStyle.HIDDEN,
             onboardingState: OnboardingState = OnboardingState.NOT_STARTED,
+            privateSpaceVisibility: PrivateSpaceVisibility = PrivateSpaceVisibility.VISIBLE,
         ): LauncherPreferences = LauncherPreferences(
             gestureMode = gestureMode,
             enabledSearchProviders = enabledSearchProviders,
@@ -104,6 +117,7 @@ class LauncherPreferences private constructor(
             themeProfileId = themeProfileId,
             notificationStyle = notificationStyle,
             onboardingState = onboardingState,
+            privateSpaceVisibility = privateSpaceVisibility,
         )
     }
 }

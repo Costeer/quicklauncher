@@ -30,6 +30,7 @@ data class CatalogApp(
     val icon: AppIcon,
     val favorite: Boolean,
     val collectionVisible: Boolean = true,
+    val searchVisible: Boolean = true,
 )
 
 class CatalogProfile(
@@ -69,6 +70,7 @@ data class AppCatalogOverride(
     val icon: AppIcon? = null,
     val favorite: Boolean = false,
     val collectionVisible: Boolean = true,
+    val searchVisible: Boolean = true,
 ) {
     init {
         require(customLabel == null || customLabel.isNotBlank()) {
@@ -119,7 +121,7 @@ class DefaultAppCatalog(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: RuntimeException) {
-                publishError(mutableState.value.profiles, REFRESH_FAILED)
+                publishError(emptyList(), REFRESH_FAILED)
                 return@withLock
             }
             val overrides = try {
@@ -138,7 +140,7 @@ class DefaultAppCatalog(
             try {
                 mutableState.value = buildSnapshot(platformSnapshot, overrides)
             } catch (_: RuntimeException) {
-                publishError(mutableState.value.profiles, REFRESH_FAILED)
+                publishError(emptyList(), REFRESH_FAILED)
             }
         }
     }
@@ -186,6 +188,8 @@ class DefaultAppCatalog(
                     favorite = override?.favorite == true,
                     collectionVisible = ordinaryCollectionsAvailable &&
                         override?.collectionVisible != false,
+                    searchVisible = ordinaryCollectionsAvailable &&
+                        override?.searchVisible != false,
                 )
             }
             .groupBy { it.identity.profile }

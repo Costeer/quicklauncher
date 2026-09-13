@@ -90,6 +90,27 @@ class RenderContractTest {
     }
 
     @Test
+    fun `prepared items carry typed profile availability and sanitized indicators`() {
+        val item = PreparedContentItem(
+            id = ContentItemId.parse("org.quicklauncher.content/work-calendar"),
+            label = "Calendar",
+            supportingText = null,
+            kind = PreparedContentKind.APP,
+            enabled = true,
+            profile = PreparedProfileKind.WORK,
+            availability = PreparedAvailability.AVAILABLE,
+            indicator = NotificationIndicator.ApproximateCount(4),
+        )
+
+        assertEquals(PreparedProfileKind.WORK, item.profile)
+        assertEquals(PreparedAvailability.AVAILABLE, item.availability)
+        assertEquals(NotificationIndicator.ApproximateCount(4), item.indicator)
+        assertThrows(IllegalArgumentException::class.java) {
+            NotificationIndicator.ApproximateCount(0)
+        }
+    }
+
+    @Test
     fun `typed action sink reports whether the host accepted an action`() {
         val accepted = ActionSink<LayoutAction> { ActionDispatchResult.Accepted }
         val rejected = ActionSink<LayoutAction> {

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/phase_five_fixture_widget_text"
+    android:initialLayout="@layout/phase_five_fixture_widget"
+    android:minWidth="120dp"
+    android:minHeight="80dp"
+    android:previewLayout="@layout/phase_five_fixture_widget"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellWidth="2"
+    android:targetCellHeight="1"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen" />

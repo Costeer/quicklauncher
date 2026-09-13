@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.ui.test.ExperimentalTestApi::class)
+
 package org.quicklauncher.modules.block.core
 
 import androidx.compose.foundation.text.BasicText
@@ -6,10 +8,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performCustomAccessibilityActionWithLabel
+import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -112,6 +118,136 @@ class CoreBlocksComposeTest {
         }
 
         compose.onNodeWithContentDescription("Preview app").assertIsDisplayed().assertIsNotEnabled()
+    }
+
+    @Test
+    fun `search block renders a real query control and filters prepared apps`() {
+        val instanceId = ModuleInstanceId.parse("org.quicklauncher.instance/search-compose-test")
+        val session = SearchBlock.open(
+            ContributionContext(instanceId, SearchCodec.default, ActiveCancellationSignal, scope),
+        )
+        compose.setContent {
+            session.Render(
+                BlockRenderInput(
+                    instanceId,
+                    state(
+                        listOf(item("alpha-search", "Alpha"), item("beta-search", "Beta")),
+                        CompositionState(CompositionRole.CURRENT, isInteractive = true),
+                    ),
+                    EmptySlotRenderer,
+                    RecordingContentRenderer(mutableListOf()),
+                    ActionSink { ActionDispatchResult.Accepted },
+                ),
+            )
+        }
+
+        compose.onNodeWithText("Search apps").performTextInput("bet")
+        compose.onNodeWithContentDescription("Beta").assertIsDisplayed()
+        compose.onAllNodesWithContentDescription("Alpha").assertCountEquals(0)
+    }
+
+    @Test
+    fun `folder block exposes only closed state and emits the standard typed activation action`() {
+        val instanceId = ModuleInstanceId.parse("org.quicklauncher.instance/folder-compose-test")
+        val folder = PreparedContentItem(
+            ContentItemId.parse("org.quicklauncher.content/folder"),
+            "Travel",
+            "3 items",
+            PreparedContentKind.FOLDER,
+            enabled = true,
+        )
+        val actions = mutableListOf<BlockAction>()
+        val renderedMembers = mutableListOf<String>()
+        val session = FolderBlock.open(
+            ContributionContext(instanceId, FolderCodec.default, ActiveCancellationSignal, scope),
+        )
+        compose.setContent {
+            session.Render(
+                BlockRenderInput(
+                    instanceId,
+                    state(listOf(folder), CompositionState(CompositionRole.CURRENT, true)),
+                    EmptySlotRenderer,
+                    RecordingContentRenderer(renderedMembers),
+                    ActionSink { action -> actions += action; ActionDispatchResult.Accepted },
+                ),
+            )
+        }
+
+        compose.onNodeWithContentDescription("Travel, folder").performClick()
+
+        assertEquals(listOf(BlockAction.ActivateItem(folder.id)), actions)
+        assertEquals(emptyList<String>(), renderedMembers)
+        compose.onNodeWithText("3 items").assertIsDisplayed()
+    }
+
+    @Test
+    fun `folder block renders every host prepared folder without owning their identities`() {
+        val instanceId = ModuleInstanceId.parse("org.quicklauncher.instance/folder-identity-test")
+        val other = PreparedContentItem(
+            ContentItemId.parse("org.quicklauncher.content/other-folder"),
+            "Other",
+            "2 items",
+            PreparedContentKind.FOLDER,
+            enabled = true,
+        )
+        val selected = PreparedContentItem(
+            ContentItemId.parse("org.quicklauncher.content/selected-folder"),
+            "Selected",
+            "4 items",
+            PreparedContentKind.FOLDER,
+            enabled = true,
+        )
+        val actions = mutableListOf<BlockAction>()
+        val session = FolderBlock.open(
+            ContributionContext(
+                instanceId,
+                FolderConfiguration(columns = 2),
+                ActiveCancellationSignal,
+                scope,
+            ),
+        )
+        compose.setContent {
+            session.Render(
+                BlockRenderInput(
+                    instanceId,
+                    state(listOf(other, selected), CompositionState(CompositionRole.CURRENT, true)),
+                    EmptySlotRenderer,
+                    RecordingContentRenderer(mutableListOf()),
+                    ActionSink { action -> actions += action; ActionDispatchResult.Accepted },
+                ),
+            )
+        }
+
+        compose.onNodeWithContentDescription("Selected, folder").performClick()
+
+        compose.onNodeWithContentDescription("Other, folder").assertIsDisplayed()
+        assertEquals(listOf(BlockAction.ActivateItem(selected.id)), actions)
+    }
+
+    @Test
+    fun `folder block reports unavailable when the host prepares no folders`() {
+        val instanceId = ModuleInstanceId.parse("org.quicklauncher.instance/missing-folder-test")
+        val session = FolderBlock.open(
+            ContributionContext(
+                instanceId,
+                FolderCodec.default,
+                ActiveCancellationSignal,
+                scope,
+            ),
+        )
+        compose.setContent {
+            session.Render(
+                BlockRenderInput(
+                    instanceId,
+                    state(emptyList(), CompositionState(CompositionRole.CURRENT, true)),
+                    EmptySlotRenderer,
+                    RecordingContentRenderer(mutableListOf()),
+                    ActionSink { ActionDispatchResult.Accepted },
+                ),
+            )
+        }
+
+        compose.onNodeWithText("Folder unavailable").assertIsDisplayed()
     }
 
     private fun state(

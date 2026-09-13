@@ -15,9 +15,13 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
@@ -78,7 +82,10 @@ data class FavoritesConfiguration(val maximumItems: Int = 5) {
 }
 
 @Serializable
-data class FolderConfiguration(val title: String = "Folder", val columns: Int = 3) {
+data class FolderConfiguration(
+    val title: String = "Folder",
+    val columns: Int = 3,
+) {
     init {
         require(title.isNotBlank()) { "Folder title must not be blank" }
         require(title.length <= 200) { "Folder title must not exceed 200 characters" }
@@ -87,7 +94,17 @@ data class FolderConfiguration(val title: String = "Folder", val columns: Int = 
 }
 
 @Serializable
+data class WidgetConfiguration(val showUnavailableExplanation: Boolean = true)
+
+@Serializable
 data class ClockDateConfiguration(val showDate: Boolean = true)
+
+@Serializable
+data class SearchConfiguration(val minimumCharacters: Int = 0) {
+    init {
+        require(minimumCharacters in 0..32) { "Minimum search characters must be between 0 and 32" }
+    }
+}
 
 @SettingsSchemaSpec(fields = [SettingSpec(
     key = "show-section-headers",
@@ -123,12 +140,30 @@ object FavoritesSettings
 object FolderSettings
 
 @SettingsSchemaSpec(fields = [SettingSpec(
+    key = "show-unavailable-explanation",
+    label = "Show unavailable explanation",
+    kind = SettingKind.BOOLEAN,
+    defaultValue = "true",
+)])
+object WidgetSettings
+
+@SettingsSchemaSpec(fields = [SettingSpec(
     key = "show-date",
     label = "Show date",
     kind = SettingKind.BOOLEAN,
     defaultValue = "true",
 )])
 object ClockDateSettings
+
+@SettingsSchemaSpec(fields = [SettingSpec(
+    key = "minimum-characters",
+    label = "Minimum characters",
+    kind = SettingKind.NUMBER,
+    defaultValue = "0",
+    minimum = 0,
+    maximum = 32,
+)])
+object SearchSettings
 
 abstract class JsonBlockCodec<C : Any>(
     typeId: String,
@@ -176,11 +211,25 @@ object FolderCodec : JsonBlockCodec<FolderConfiguration>(
     FolderConfiguration.serializer(),
 )
 
+@ConfigurationCodecSpec(configTypeId = CoreBlockIds.WIDGET_CONFIG)
+object WidgetCodec : JsonBlockCodec<WidgetConfiguration>(
+    CoreBlockIds.WIDGET_CONFIG,
+    WidgetConfiguration(),
+    WidgetConfiguration.serializer(),
+)
+
 @ConfigurationCodecSpec(configTypeId = CoreBlockIds.CLOCK_CONFIG)
 object ClockDateCodec : JsonBlockCodec<ClockDateConfiguration>(
     CoreBlockIds.CLOCK_CONFIG,
     ClockDateConfiguration(),
     ClockDateConfiguration.serializer(),
+)
+
+@ConfigurationCodecSpec(configTypeId = CoreBlockIds.SEARCH_CONFIG)
+object SearchCodec : JsonBlockCodec<SearchConfiguration>(
+    CoreBlockIds.SEARCH_CONFIG,
+    SearchConfiguration(),
+    SearchConfiguration.serializer(),
 )
 
 @RegisterBlock(
@@ -252,6 +301,24 @@ object FolderBlock : BlockContribution<FolderConfiguration> {
 }
 
 @RegisterBlock(
+    id = CoreBlockIds.WIDGET,
+    contractMajor = 1,
+    configTypeId = CoreBlockIds.WIDGET_CONFIG,
+    displayName = "Widget",
+    description = "Delegates a host-owned widget surface to the prepared content renderer",
+    settings = WidgetSettings::class,
+    codec = WidgetCodec::class,
+    contractTests = WidgetContract::class,
+    compatibleSlotTypes = [CoreBlockIds.GRID_SLOT, CoreBlockIds.FULL_SLOT],
+)
+object WidgetBlock : BlockContribution<WidgetConfiguration> {
+    override fun open(context: ContributionContext<WidgetConfiguration>): BlockSession =
+        CoreBlockSession(context, "Widget") { input ->
+            Widget(input, context.configuration)
+        }
+}
+
+@RegisterBlock(
     id = CoreBlockIds.CLOCK,
     contractMajor = 1,
     configTypeId = CoreBlockIds.CLOCK_CONFIG,
@@ -265,6 +332,23 @@ object FolderBlock : BlockContribution<FolderConfiguration> {
 object ClockDateBlock : BlockContribution<ClockDateConfiguration> {
     override fun open(context: ContributionContext<ClockDateConfiguration>): BlockSession =
         CoreBlockSession(context, "Clock and date") { input -> ClockDate(input, context.configuration) }
+}
+
+@RegisterBlock(
+    id = CoreBlockIds.SEARCH,
+    contractMajor = 1,
+    configTypeId = CoreBlockIds.SEARCH_CONFIG,
+    displayName = "Search",
+    description = "Filters host-prepared applications without exposing platform objects",
+    settings = SearchSettings::class,
+    codec = SearchCodec::class,
+    contractTests = SearchContract::class,
+    compatibleSlotTypes = [CoreBlockIds.GRID_SLOT, CoreBlockIds.FULL_SLOT],
+    occupiedScrollAxes = [ScrollAxisSpec.VERTICAL],
+)
+object SearchBlock : BlockContribution<SearchConfiguration> {
+    override fun open(context: ContributionContext<SearchConfiguration>): BlockSession =
+        CoreBlockSession(context, "Search apps") { input -> SearchApps(input, context.configuration) }
 }
 
 private class CoreBlockSession<C : Any>(
@@ -285,7 +369,6 @@ private class CoreBlockSession<C : Any>(
     override fun Render(input: BlockRenderInput) {
         check(!isClosed) { "Block session is closed" }
         context.cancellation.ensureActive()
-        DisposableEffect(this) { onDispose(::close) }
         Box(
             Modifier.fillMaxSize().semantics {
                 contentDescription = accessibilityLabel
@@ -363,12 +446,51 @@ private fun Favorites(input: BlockRenderInput, configuration: FavoritesConfigura
 
 @Composable
 private fun Folder(input: BlockRenderInput, configuration: FolderConfiguration) {
-    Column(Modifier.fillMaxSize()) {
-        Text(configuration.title, style = MaterialTheme.typography.titleLarge)
-        StatusOrContent(input, configuration.title) {
-            ItemGrid(input, configuration.columns, "${configuration.title} contents")
+    StatusOrContent(input, configuration.title) {
+        val folders = input.state.content.items.filter {
+            it.kind == org.quicklauncher.contracts.ui.PreparedContentKind.FOLDER
         }
-        input.state.content.surfaces.forEach { surface -> input.content.RenderSurface(surface) }
+        if (folders.isEmpty()) {
+            StatusText("Folder unavailable")
+        } else {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(minOf(configuration.columns, folders.size)),
+                modifier = Modifier.fillMaxSize(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(folders, key = { it.id.value }) { folder ->
+                    Card(
+                        Modifier.fillMaxWidth().combinedClickable(
+                            enabled = input.state.composition.isInteractive && folder.enabled,
+                            onClick = { input.actions.emit(BlockAction.ActivateItem(folder.id)) },
+                            onClickLabel = "Open ${folder.label}",
+                        ).semantics {
+                            contentDescription = "${folder.label}, folder"
+                        },
+                    ) {
+                        Column(Modifier.padding(16.dp)) {
+                            Text(folder.label, style = MaterialTheme.typography.titleLarge)
+                            folder.supportingText?.let { Text(it) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Widget(input: BlockRenderInput, configuration: WidgetConfiguration) {
+    StatusOrContent(input, "Widget") {
+        val surface = input.state.content.surfaces.singleOrNull {
+            it.kind == org.quicklauncher.contracts.ui.PreparedSurfaceKind.WIDGET
+        }
+        if (surface == null) {
+            if (configuration.showUnavailableExplanation) StatusText("Widget unavailable")
+        } else {
+            input.content.RenderSurface(surface, Modifier.fillMaxSize())
+        }
     }
 }
 
@@ -380,6 +502,36 @@ private fun ClockDate(input: BlockRenderInput, configuration: ClockDateConfigura
                 .take(if (configuration.showDate) 2 else 1)
                 .forEach { item -> PreparedItem(input, item) }
             input.state.content.surfaces.forEach { surface -> input.content.RenderSurface(surface) }
+        }
+    }
+}
+
+@Composable
+private fun SearchApps(input: BlockRenderInput, configuration: SearchConfiguration) {
+    StatusOrContent(input, "search") {
+        var query by remember { mutableStateOf("") }
+        val matches = input.state.content.items.filter { item ->
+            item.kind == org.quicklauncher.contracts.ui.PreparedContentKind.APP &&
+                query.length >= configuration.minimumCharacters &&
+                item.label.contains(query.trim(), ignoreCase = true)
+        }
+        Column(Modifier.fillMaxSize()) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it.take(512) },
+                enabled = input.state.composition.isInteractive,
+                label = { Text("Search apps") },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            if (matches.isEmpty()) {
+                StatusText(if (query.isBlank()) "No applications available" else "No matching applications")
+            } else {
+                LazyColumn(Modifier.weight(1f)) {
+                    items(matches, key = { it.id.value }) { item ->
+                        PreparedItem(input, item, Modifier.fillMaxWidth())
+                    }
+                }
+            }
         }
     }
 }
@@ -466,12 +618,28 @@ object FavoritesContract : CoreBlockContract<FavoritesConfiguration>(CoreBlockId
 object FolderContract : CoreBlockContract<FolderConfiguration>(CoreBlockIds.FOLDER)
 
 @ContractTestSpec(
+    contributionId = CoreBlockIds.WIDGET,
+    category = ContributionCategorySpec.BLOCK,
+    scenarios = [PreviewScenarioSpec.EMPTY, PreviewScenarioSpec.NORMAL, PreviewScenarioSpec.LOADING, PreviewScenarioSpec.PERMISSION_DENIED, PreviewScenarioSpec.PROFILE_LOCKED, PreviewScenarioSpec.LARGE_TEXT, PreviewScenarioSpec.ERROR],
+    performanceHooks = [PerformanceMetricSpec.FIRST_RENDER, PerformanceMetricSpec.ACTION_DISPATCH, PerformanceMetricSpec.DISPOSAL],
+)
+object WidgetContract : CoreBlockContract<WidgetConfiguration>(CoreBlockIds.WIDGET)
+
+@ContractTestSpec(
     contributionId = CoreBlockIds.CLOCK,
     category = ContributionCategorySpec.BLOCK,
     scenarios = [PreviewScenarioSpec.EMPTY, PreviewScenarioSpec.NORMAL, PreviewScenarioSpec.LOADING, PreviewScenarioSpec.PERMISSION_DENIED, PreviewScenarioSpec.PROFILE_LOCKED, PreviewScenarioSpec.LARGE_TEXT, PreviewScenarioSpec.ERROR],
     performanceHooks = [PerformanceMetricSpec.FIRST_RENDER, PerformanceMetricSpec.ACTION_DISPATCH, PerformanceMetricSpec.DISPOSAL],
 )
 object ClockDateContract : CoreBlockContract<ClockDateConfiguration>(CoreBlockIds.CLOCK)
+
+@ContractTestSpec(
+    contributionId = CoreBlockIds.SEARCH,
+    category = ContributionCategorySpec.BLOCK,
+    scenarios = [PreviewScenarioSpec.EMPTY, PreviewScenarioSpec.NORMAL, PreviewScenarioSpec.LOADING, PreviewScenarioSpec.PERMISSION_DENIED, PreviewScenarioSpec.PROFILE_LOCKED, PreviewScenarioSpec.LARGE_TEXT, PreviewScenarioSpec.ERROR],
+    performanceHooks = [PerformanceMetricSpec.FIRST_RENDER, PerformanceMetricSpec.ACTION_DISPATCH, PerformanceMetricSpec.DISPOSAL],
+)
+object SearchContract : CoreBlockContract<SearchConfiguration>(CoreBlockIds.SEARCH)
 
 object CoreBlockIds {
     const val GRID_SLOT = "org.quicklauncher.slot/grid-content"
@@ -484,8 +652,12 @@ object CoreBlockIds {
     const val FAVORITES_CONFIG = "org.quicklauncher.block/favorites-config"
     const val FOLDER = "org.quicklauncher.block/folder"
     const val FOLDER_CONFIG = "org.quicklauncher.block/folder-config"
+    const val WIDGET = "org.quicklauncher.block/widget"
+    const val WIDGET_CONFIG = "org.quicklauncher.block/widget-config"
     const val CLOCK = "org.quicklauncher.block/clock-date"
     const val CLOCK_CONFIG = "org.quicklauncher.block/clock-date-config"
+    const val SEARCH = "org.quicklauncher.block/search"
+    const val SEARCH_CONFIG = "org.quicklauncher.block/search-config"
 }
 
 private val ConfigurationJson = Json {

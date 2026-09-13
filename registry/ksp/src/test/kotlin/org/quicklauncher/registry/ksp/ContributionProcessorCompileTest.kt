@@ -159,6 +159,94 @@ class ContributionProcessorCompileTest {
     }
 
     @Test
+    fun `reserved safe layout contribution identity across fragments fails aggregation`() {
+        val outcome = compile(aggregationSource(reservedContributionId = true))
+
+        assertFailure(
+            outcome,
+            "registry.reserved-safe-layout-identity",
+            "compiletest.AggregateApplicationRegistry",
+            "org.quicklauncher.core/safe-layout",
+        )
+    }
+
+    @Test
+    fun `reserved safe layout configuration identity across fragments fails aggregation`() {
+        val outcome = compile(aggregationSource(reservedConfigTypeId = true))
+
+        assertFailure(
+            outcome,
+            "registry.reserved-safe-layout-identity",
+            "compiletest.AggregateApplicationRegistry",
+            "org.quicklauncher.core/safe-layout",
+        )
+    }
+
+    @Test
+    fun `aggregate rejects fragment declarations that do not implement the registry contract`() {
+        val outcome = compile(
+            SourceFile.kotlin(
+                "WrongFragment.kt",
+                """
+                package compiletest
+
+                import org.quicklauncher.registry.annotations.AggregateContributionRegistry
+
+                object NotARegistry
+
+                @AggregateContributionRegistry(
+                    fragments = [NotARegistry::class],
+                    packageName = "compiletest.generated",
+                )
+                object AggregateApplicationRegistry
+                """.trimIndent(),
+            ),
+        )
+
+        assertFailure(
+            outcome,
+            "registry.fragment-contract",
+            "compiletest.AggregateApplicationRegistry",
+            "must implement ContributionRegistry",
+        )
+    }
+
+    @Test
+    fun `aggregate rejects registry declarations without fragment metadata`() {
+        val outcome = compile(
+            SourceFile.kotlin(
+                "MissingManifest.kt",
+                """
+                package compiletest
+
+                import org.quicklauncher.contracts.contribution.ContributionRegistry
+                import org.quicklauncher.contracts.contribution.RegisteredContribution
+                import org.quicklauncher.contracts.domain.ContributionTypeId
+                import org.quicklauncher.registry.annotations.AggregateContributionRegistry
+
+                object RegistryWithoutManifest : ContributionRegistry {
+                    override val categoryIds = emptySet<ContributionTypeId>()
+                    override val entries = emptyList<RegisteredContribution<*>>()
+                }
+
+                @AggregateContributionRegistry(
+                    fragments = [RegistryWithoutManifest::class],
+                    packageName = "compiletest.generated",
+                )
+                object AggregateApplicationRegistry
+                """.trimIndent(),
+            ),
+        )
+
+        assertFailure(
+            outcome,
+            "registry.missing-fragment-manifest",
+            "compiletest.AggregateApplicationRegistry",
+            "has no generated manifest",
+        )
+    }
+
+    @Test
     fun `one valid sample of every contribution type compiles in deterministic registry order`() {
         val compilation = compile(validFiveSource())
 
@@ -833,13 +921,21 @@ class ContributionProcessorCompileTest {
         blockCycle: Boolean = false,
         incompatibleSlot: Boolean = false,
         unsupportedMajor: Boolean = false,
+        reservedContributionId: Boolean = false,
+        reservedConfigTypeId: Boolean = false,
     ): SourceFile {
         val fragments = if (reverseFragments) "LayoutFragment::class, BlockFragment::class" else
             "BlockFragment::class, LayoutFragment::class"
-        val blockId = if (duplicateContributionId) "org.quicklauncher.samples/layout-a" else
-            "org.quicklauncher.samples/block-a"
-        val blockConfig = if (duplicateConfigTypeId) "org.quicklauncher.samples/layout-a-config" else
-            "org.quicklauncher.samples/block-a-config"
+        val blockId = when {
+            reservedContributionId -> "org.quicklauncher.core/safe-layout"
+            duplicateContributionId -> "org.quicklauncher.samples/layout-a"
+            else -> "org.quicklauncher.samples/block-a"
+        }
+        val blockConfig = when {
+            reservedConfigTypeId -> "org.quicklauncher.core/safe-layout"
+            duplicateConfigTypeId -> "org.quicklauncher.samples/layout-a-config"
+            else -> "org.quicklauncher.samples/block-a-config"
+        }
         val layoutProvided = if (capabilityCycle) "[\"org.quicklauncher.capability/first\"]" else "[]"
         val layoutRequired = if (capabilityCycle) "[\"org.quicklauncher.capability/second\"]" else "[]"
         val blockProvided = if (capabilityCycle) "[\"org.quicklauncher.capability/second\"]" else "[]"

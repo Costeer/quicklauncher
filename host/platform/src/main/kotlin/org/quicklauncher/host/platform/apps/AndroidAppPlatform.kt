@@ -52,15 +52,11 @@ class AndroidAppPlatform internal constructor(
     override suspend fun snapshot(): AppPlatformSnapshot = withContext(dispatcher) {
         check(!closed.get()) { "Android app platform is closed" }
         val acceptedProfiles = backend.profiles()
-            .filterNot { it.userType == UserManager.USER_TYPE_PROFILE_PRIVATE }
-            .map { profile ->
+            .mapNotNull { profile ->
+                val kind = acceptedAppProfileKind(profile.userType) ?: return@mapNotNull null
                 AppPlatformProfile(
                     serial = ProfileSerial.of(profile.serial),
-                    kind = if (profile.userType == UserManager.USER_TYPE_PROFILE_MANAGED) {
-                        AppProfileKind.WORK
-                    } else {
-                        AppProfileKind.PERSONAL
-                    },
+                    kind = kind,
                     quiet = profile.quiet,
                     unlocked = profile.unlocked,
                 )
@@ -87,7 +83,7 @@ class AndroidAppPlatform internal constructor(
             try {
                 val profile = backend.profile(identity.profile.value)
                     ?: return@withContext AppLaunchResult.MissingProfile
-                if (profile.userType == UserManager.USER_TYPE_PROFILE_PRIVATE) {
+                if (acceptedAppProfileKind(profile.userType) == null) {
                     return@withContext AppLaunchResult.SecurityDenied
                 }
                 if (profile.quiet || !profile.unlocked) {
@@ -120,6 +116,14 @@ class AndroidAppPlatform internal constructor(
         const val LAUNCH_FAILED = "android_launch_failed"
     }
 }
+
+internal fun acceptedAppProfileKind(userType: String): AppProfileKind? = when {
+    userType == UserManager.USER_TYPE_PROFILE_MANAGED -> AppProfileKind.WORK
+    userType.startsWith(FULL_USER_TYPE_PREFIX) -> AppProfileKind.PERSONAL
+    else -> null
+}
+
+private const val FULL_USER_TYPE_PREFIX = "android.os.usertype.full."
 
 internal data class AndroidProfileRecord(
     val serial: Long,
