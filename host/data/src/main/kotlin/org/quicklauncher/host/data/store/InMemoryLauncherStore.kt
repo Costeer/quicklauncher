@@ -218,6 +218,7 @@ private class MutableStoreState(
     }
 
     fun apply(edit: LauncherEdit): StoreRejection? = when (edit) {
+        is LauncherEdit.RestoreSnapshot -> restoreSnapshot(edit.snapshot, edit.rebindWidgets)
         is LauncherEdit.InstallLauncherPlan -> installLauncherPlan(edit.installation)
         is LauncherEdit.Bootstrap -> bootstrap(edit.install)
         is LauncherEdit.InstallDestination -> install(edit.install)
@@ -257,6 +258,90 @@ private class MutableStoreState(
         is LauncherEdit.DeleteFolder -> deleteFolder(edit)
         is LauncherEdit.PutAppOverride -> putAppOverride(edit)
         is LauncherEdit.RemoveAppOverride -> removeAppOverride(edit)
+        is LauncherEdit.PutThemeProfile -> putThemeProfile(edit)
+        is LauncherEdit.DeleteThemeProfile -> deleteThemeProfile(edit)
+        is LauncherEdit.PutDestinationBackground -> putDestinationBackground(edit)
+        is LauncherEdit.DeleteDestinationBackground -> deleteDestinationBackground(edit)
+    }
+
+    private fun restoreSnapshot(snapshot: LauncherSnapshot, rebindWidgets: Boolean): StoreRejection? {
+        destinations.clear()
+        destinationLayouts.clear()
+        moduleInstances.clear()
+        configurationDocuments.clear()
+        placements.clear()
+        contentItems.clear()
+        folderMembers.clear()
+        appOverrides.clear()
+        widgetPlacements.clear()
+        themeProfiles.clear()
+        destinationBackgrounds.clear()
+        crashMarkers.clear()
+
+        startDestinationId = snapshot.startDestinationId
+        snapshot.destinations.forEach { destinations[it.id] = it }
+        destinationLayouts += snapshot.destinationLayouts
+        snapshot.moduleInstances.forEach { moduleInstances[it.id] = it }
+        snapshot.configurationDocuments.forEach { configurationDocuments[it.id] = it }
+        snapshot.placements.forEach { placements[it.id] = it }
+        contentItems += snapshot.contentItems
+        folderMembers += snapshot.folderMembers
+        appOverrides += snapshot.appOverrides
+        widgetPlacements += snapshot.widgetPlacements.map { widget ->
+            if (rebindWidgets) {
+                widget.copy(
+                    appWidgetId = null,
+                    bindState = WidgetBindState.PENDING,
+                    restoreState = WidgetRestoreState.REBIND_REQUIRED,
+                    cleanupState = WidgetCleanupState.NONE,
+                )
+            } else {
+                widget
+            }
+        }
+        themeProfiles += snapshot.themeProfiles
+        destinationBackgrounds += snapshot.destinationBackgrounds
+        return null
+    }
+
+    private fun putThemeProfile(edit: LauncherEdit.PutThemeProfile): StoreRejection? {
+        themeProfiles.removeAll { it.id == edit.profile.id }
+        themeProfiles += edit.profile
+        return null
+    }
+
+    private fun deleteThemeProfile(edit: LauncherEdit.DeleteThemeProfile): StoreRejection? {
+        if (!edit.confirmed) return confirmationRequired("Theme profile removal requires confirmation")
+        if (themeProfiles.none { it.id == edit.themeProfileId }) {
+            return notFound("Theme profile does not exist")
+        }
+        if (destinationBackgrounds.any { it.themeProfileId == edit.themeProfileId }) {
+            return recoveryStateMismatch("Theme profile still owns destination backgrounds")
+        }
+        themeProfiles.removeAll { it.id == edit.themeProfileId }
+        return null
+    }
+
+    private fun putDestinationBackground(
+        edit: LauncherEdit.PutDestinationBackground,
+    ): StoreRejection? {
+        val background = edit.background
+        if (background.destinationId !in destinations) {
+            return notFound("Destination background target does not exist")
+        }
+        if (themeProfiles.none { it.id == background.themeProfileId }) {
+            return invalidReference("Destination background theme profile does not exist")
+        }
+        destinationBackgrounds.removeAll { it.destinationId == background.destinationId }
+        destinationBackgrounds += background
+        return null
+    }
+
+    private fun deleteDestinationBackground(
+        edit: LauncherEdit.DeleteDestinationBackground,
+    ): StoreRejection? {
+        destinationBackgrounds.removeAll { it.destinationId == edit.destinationId }
+        return null
     }
 
     fun validate(): StoreRejection? {
@@ -444,11 +529,17 @@ private class MutableStoreState(
         if (themeProfiles.map(ThemeProfileRecord::id).toSet().size != themeProfiles.size) {
             return duplicate("theme profile")
         }
+        if (themeProfiles.size > MAX_THEME_PROFILES) {
+            return configurationInvalid("Theme profile count exceeds the durable bound")
+        }
         if (
             destinationBackgrounds.map(DestinationBackgroundRecord::destinationId).toSet().size !=
             destinationBackgrounds.size
         ) {
             return duplicate("destination background")
+        }
+        if (destinationBackgrounds.size > MAX_DESTINATION_BACKGROUNDS) {
+            return configurationInvalid("Destination background count exceeds the durable bound")
         }
         if (destinationBackgrounds.any {
                 it.destinationId !in destinations ||
@@ -1633,4 +1724,9 @@ private class MutableStoreState(
 
     private fun recoveryStateMismatch(message: String): StoreRejection =
         StoreRejection(StoreRejectionCode.RECOVERY_STATE_MISMATCH, message)
+
+    private companion object {
+        const val MAX_THEME_PROFILES = 64
+        const val MAX_DESTINATION_BACKGROUNDS = 256
+    }
 }

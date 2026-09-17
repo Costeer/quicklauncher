@@ -75,6 +75,7 @@ annotation class RegisterBlock(
     val compatibleSlotTypes: Array<String>,
     val childSlots: Array<SlotSpec> = [],
     val occupiedScrollAxes: Array<ScrollAxisSpec> = [],
+    val requiresSearchPresentation: Boolean = false,
 )
 
 @Target(AnnotationTarget.CLASS)

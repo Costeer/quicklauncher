@@ -3,6 +3,7 @@ package org.quicklauncher.host.data.room
 import androidx.room3.Dao
 import androidx.room3.Insert
 import androidx.room3.Query
+import androidx.room3.OnConflictStrategy
 
 @Dao
 internal interface LauncherDao {
@@ -33,10 +34,19 @@ internal interface LauncherDao {
     @Query("SELECT * FROM widget_placements ORDER BY moduleInstanceId")
     suspend fun widgetPlacements(): List<WidgetPlacementEntity>
 
-    @Query("SELECT * FROM theme_profiles ORDER BY id")
+    @Query(
+        "SELECT substr(id, 1, 201) AS id, substr(name, 1, 81) AS name, schemaVersion, " +
+            "substr(encodedTheme, 1, 262145) AS encodedTheme " +
+            "FROM theme_profiles ORDER BY id LIMIT 65",
+    )
     suspend fun themeProfiles(): List<ThemeProfileEntity>
 
-    @Query("SELECT * FROM destination_backgrounds ORDER BY destinationId")
+    @Query(
+        "SELECT substr(destinationId, 1, 201) AS destinationId, " +
+            "substr(themeProfileId, 1, 201) AS themeProfileId, schemaVersion, " +
+            "substr(encodedBackground, 1, 65537) AS encodedBackground " +
+            "FROM destination_backgrounds ORDER BY destinationId LIMIT 257",
+    )
     suspend fun destinationBackgrounds(): List<DestinationBackgroundEntity>
 
     @Query("SELECT * FROM crash_markers ORDER BY id")
@@ -44,6 +54,18 @@ internal interface LauncherDao {
 
     @Query("SELECT * FROM store_metadata WHERE singletonKey = 1")
     suspend fun metadata(): StoreMetadataEntity?
+
+    @Query("SELECT COUNT(*) FROM search_launch_history")
+    suspend fun searchLaunchHistoryCount(): Int
+
+    @Query("SELECT * FROM search_launch_history ORDER BY lastLaunchedAtMillis DESC, targetKind, profileSerial, packageName, targetName LIMIT :limit")
+    suspend fun searchLaunchHistory(limit: Int): List<SearchLaunchHistoryEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSearchLaunchHistory(values: List<SearchLaunchHistoryEntity>)
+
+    @Query("DELETE FROM search_launch_history")
+    suspend fun deleteSearchLaunchHistory()
 
     @Insert
     suspend fun insertDestinations(values: List<DestinationEntity>)

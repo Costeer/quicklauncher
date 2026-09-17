@@ -103,6 +103,7 @@ object RegistrySourceGenerator {
                 )
                 appendLine("    childSlots = ${slotListExpression(specific.childSlots)},")
                 appendLine("    occupiedScrollAxes = ${specific.occupiedScrollAxes.enumSet("ScrollAxis")},")
+                appendLine("    requiresSearchPresentation = ${specific.requiresSearchPresentation},")
             }
             is RawSpecificDescriptor.SearchProvider -> {
                 appendLine("    resultKinds = ${specific.resultKinds.enumSet("SearchResultKind")},")

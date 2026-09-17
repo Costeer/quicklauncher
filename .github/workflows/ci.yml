@@ -413,6 +413,12 @@ jobs:
           :modules:block:core:testReleaseUnitTest
           :modules:block:core:verifyPaparazziDebug
           :modules:block:core:licensee
+          :modules:search:core:build
+          :modules:search:core:test
+          :modules:search:core:licensee
+          :modules:command:core:build
+          :modules:command:core:test
+          :modules:command:core:licensee
           :modules:templates:core:build
           :modules:templates:core:test
           :modules:templates:core:licensee

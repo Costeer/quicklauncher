@@ -287,7 +287,11 @@ data class ThemeProfileRecord(
     val schemaVersion: Int = 1,
 ) {
     init {
-        require(name.isNotBlank()) { "Theme profile name must not be blank" }
+        require(id.value.length <= 200) { "Theme profile identity exceeds the durable bound" }
+        require(name.isNotBlank() && name.length <= 80) {
+            "Theme profile name must contain 1 to 80 characters"
+        }
+        require(encoded.length <= 256 * 1024) { "Encoded theme profile exceeds the durable bound" }
         require(schemaVersion >= 1) { "Theme profile schema version must be positive" }
     }
 }
@@ -299,6 +303,12 @@ data class DestinationBackgroundRecord(
     val schemaVersion: Int = 1,
 ) {
     init {
+        require(destinationId.value.length <= 200 && themeProfileId.value.length <= 200) {
+            "Destination-background identity exceeds the durable bound"
+        }
+        require(encoded.length <= 64 * 1024) {
+            "Encoded destination background exceeds the durable bound"
+        }
         require(schemaVersion >= 1) { "Destination-background schema version must be positive" }
     }
 }
@@ -452,6 +462,41 @@ class LauncherSnapshot internal constructor(
             moduleInstances = installation.moduleInstances,
             configurationDocuments = installation.configurations,
             placements = installation.placements,
+        )
+
+        /**
+         * Rebuilds a complete portable snapshot before the store validates it as one atomic edit.
+         * The archived revision is deliberately ignored: a successful restore receives the next
+         * local revision and can never move optimistic-concurrency state backwards.
+         */
+        fun restored(
+            startDestinationId: DestinationId?,
+            destinations: Collection<DestinationRecord>,
+            destinationLayouts: Collection<DestinationLayoutRecord>,
+            moduleInstances: Collection<ModuleInstanceRecord>,
+            configurationDocuments: Collection<StoredConfigurationDocument>,
+            placements: Collection<PlacementRecord>,
+            contentItems: Collection<ContentItemRecord> = emptyList(),
+            folderMembers: Collection<FolderMemberRecord> = emptyList(),
+            appOverrides: Collection<AppOverrideRecord> = emptyList(),
+            widgetPlacements: Collection<WidgetPlacementRecord> = emptyList(),
+            themeProfiles: Collection<ThemeProfileRecord> = emptyList(),
+            destinationBackgrounds: Collection<DestinationBackgroundRecord> = emptyList(),
+        ): LauncherSnapshot = LauncherSnapshot(
+            revision = StoreRevision.ZERO,
+            startDestinationId = startDestinationId,
+            destinations = destinations,
+            destinationLayouts = destinationLayouts,
+            moduleInstances = moduleInstances,
+            configurationDocuments = configurationDocuments,
+            placements = placements,
+            contentItems = contentItems,
+            folderMembers = folderMembers,
+            appOverrides = appOverrides,
+            widgetPlacements = widgetPlacements,
+            themeProfiles = themeProfiles,
+            destinationBackgrounds = destinationBackgrounds,
+            crashMarkers = emptyList(),
         )
     }
 }

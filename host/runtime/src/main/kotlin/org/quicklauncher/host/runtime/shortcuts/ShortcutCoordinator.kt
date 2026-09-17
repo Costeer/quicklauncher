@@ -239,6 +239,10 @@ interface ShortcutCoordinator : AutoCloseable {
         ShortcutPlacementCreation.Unavailable(ShortcutUnavailableReason.PLATFORM_FAILURE)
 
     suspend fun launch(placementId: ContentItemId): ShortcutLaunchResult
+
+    /** Revalidates and launches a currently discoverable dynamic or pinned search target. */
+    suspend fun launch(target: ShortcutTargetIdentity): ShortcutLaunchResult =
+        ShortcutLaunchResult.Unavailable(ShortcutUnavailableReason.MISSING)
 }
 
 sealed interface ShortcutPlacementCreation {
@@ -331,6 +335,33 @@ class DefaultShortcutCoordinator(
         if (!current.enabled) return ShortcutLaunchResult.Unavailable(ShortcutUnavailableReason.DISABLED)
         return try {
             platform.launch(placement.target)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: SecurityException) {
+            ShortcutLaunchResult.Unavailable(ShortcutUnavailableReason.SECURITY_DENIED)
+        } catch (_: RuntimeException) {
+            ShortcutLaunchResult.Unavailable(ShortcutUnavailableReason.PLATFORM_FAILURE)
+        }
+    }
+
+    override suspend fun launch(target: ShortcutTargetIdentity): ShortcutLaunchResult {
+        if (closed.get()) return ShortcutLaunchResult.Closed
+        if (target.owner !in eligibleOwners) {
+            return ShortcutLaunchResult.Unavailable(ShortcutUnavailableReason.PROFILE_UNAVAILABLE)
+        }
+        val query = platformQuery(target.owner)
+        if (query is ShortcutQueryResult.Unavailable) {
+            return ShortcutLaunchResult.Unavailable(query.reason)
+        }
+        val current = (query as ShortcutQueryResult.Available).shortcuts.singleOrNull {
+            it.target == target
+        }
+            ?: return ShortcutLaunchResult.Unavailable(ShortcutUnavailableReason.MISSING)
+        if (!current.enabled) {
+            return ShortcutLaunchResult.Unavailable(ShortcutUnavailableReason.DISABLED)
+        }
+        return try {
+            platform.launch(target)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: SecurityException) {

@@ -35,9 +35,11 @@ import org.quicklauncher.contracts.contribution.CodecResult
 import org.quicklauncher.contracts.contribution.ContractCompatibility
 import org.quicklauncher.contracts.contribution.ContributionContext
 import org.quicklauncher.contracts.contribution.DescriptorValidator
+import org.quicklauncher.contracts.contribution.GenerationAwareSearchProviderSession
 import org.quicklauncher.contracts.contribution.LayoutSession
 import org.quicklauncher.contracts.contribution.LayoutDescriptor
 import org.quicklauncher.contracts.contribution.SearchProviderDescriptor
+import org.quicklauncher.contracts.contribution.SearchProviderRequest
 import org.quicklauncher.contracts.contribution.LauncherCommandDescriptor
 import org.quicklauncher.contracts.contribution.DestinationTemplateDescriptor
 import org.quicklauncher.contracts.contribution.ChoiceSetting
@@ -477,7 +479,7 @@ abstract class SearchProviderContributionContractSuite<C : Any> : CommonContribu
     fun `queries produce typed results for every preview scenario`() = runBlocking {
         assertImmutableList(contract.fixtures)
         assertEquals(PreviewScenario.entries.toSet(), contract.fixtures.map { it.scenario }.toSet())
-        contract.fixtures.forEach { fixture ->
+        contract.fixtures.forEachIndexed { index, fixture ->
             val lifecycle = ContractInstanceLifecycle()
             val session = contract.target.open(
                 ContributionContext(
@@ -487,8 +489,13 @@ abstract class SearchProviderContributionContractSuite<C : Any> : CommonContribu
                     lifecycle.scope,
                 ),
             )
-            session.updateQuery(fixture.query)
-            val results = session.results.first()
+            assertTrue(session is GenerationAwareSearchProviderSession)
+            session as GenerationAwareSearchProviderSession
+            val generation = index.toLong() + 1L
+            session.update(SearchProviderRequest(generation, fixture.query, emptyList()))
+            val snapshot = session.snapshots.first()
+            assertEquals(generation, snapshot.generation)
+            val results = snapshot.results
             assertEquals(fixture.expectedResults, results)
             assertImmutableList(results)
             assertImmutableList(fixture.expectedResults)
@@ -536,19 +543,22 @@ abstract class SearchProviderContributionContractSuite<C : Any> : CommonContribu
         val session = contract.target.open(
             ContributionContext(contract.instanceId, contract.codec.default, signal, lifecycle.scope),
         )
-        val emissions = mutableListOf<List<org.quicklauncher.contracts.contribution.ProviderResult>>()
+        assertTrue(session is GenerationAwareSearchProviderSession)
+        session as GenerationAwareSearchProviderSession
+        val emissions = mutableListOf<org.quicklauncher.contracts.contribution.ProviderResultSnapshot>()
         val collector = launch(start = CoroutineStart.UNDISPATCHED) {
-            session.results.collect { result -> emissions += result }
+            session.snapshots.collect { result -> emissions += result }
         }
 
-        session.updateQuery(stale.query)
-        session.updateQuery(replacement.query)
+        session.update(SearchProviderRequest(1L, stale.query, emptyList()))
+        session.update(SearchProviderRequest(2L, replacement.query, emptyList()))
         dispatcher.runUntilIdle()
         yield()
 
-        assertEquals(listOf(replacement.expectedResults), emissions)
-        assertTrue(emissions.none { it == stale.expectedResults })
-        emissions.forEach(::assertImmutableList)
+        assertEquals(listOf(2L), emissions.map { it.generation })
+        assertEquals(listOf(replacement.expectedResults), emissions.map { it.results })
+        assertTrue(emissions.none { it.results == stale.expectedResults })
+        emissions.forEach { assertImmutableList(it.results) }
 
         val emissionCountBeforeClose = emissions.size
         session.close()
@@ -568,12 +578,14 @@ abstract class SearchProviderContributionContractSuite<C : Any> : CommonContribu
         val session = contract.target.open(
             ContributionContext(contract.instanceId, contract.codec.default, signal, lifecycle.scope),
         )
-        val emissions = mutableListOf<List<org.quicklauncher.contracts.contribution.ProviderResult>>()
+        assertTrue(session is GenerationAwareSearchProviderSession)
+        session as GenerationAwareSearchProviderSession
+        val emissions = mutableListOf<org.quicklauncher.contracts.contribution.ProviderResultSnapshot>()
         val collector = launch(start = CoroutineStart.UNDISPATCHED) {
-            session.results.collect { result -> emissions += result }
+            session.snapshots.collect { result -> emissions += result }
         }
 
-        session.updateQuery(normal.query)
+        session.update(SearchProviderRequest(1L, normal.query, emptyList()))
         signal.cancel()
         dispatcher.runUntilIdle()
         yield()

@@ -1,7 +1,8 @@
 package org.quicklauncher.app
 
+import android.graphics.BitmapFactory
 import androidx.activity.compose.PredictiveBackHandler
-import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
@@ -27,8 +29,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -52,7 +54,6 @@ import java.util.concurrent.atomic.AtomicBoolean
 import org.quicklauncher.contracts.contribution.ContributionRegistry
 import org.quicklauncher.contracts.contribution.RegisteredLayout
 import org.quicklauncher.contracts.contribution.find
-import org.quicklauncher.contracts.domain.ArgbColor
 import org.quicklauncher.contracts.domain.ContentItemId
 import org.quicklauncher.contracts.domain.ContributionId
 import org.quicklauncher.contracts.domain.DestinationId
@@ -61,12 +62,12 @@ import org.quicklauncher.contracts.domain.ProfilePackageIdentity
 import org.quicklauncher.contracts.domain.StableKey
 import org.quicklauncher.contracts.ui.ActionDispatchResult
 import org.quicklauncher.contracts.ui.ActionSink
-import org.quicklauncher.contracts.ui.BackgroundContrast
 import org.quicklauncher.contracts.ui.BlockAction
 import org.quicklauncher.contracts.ui.EditorMode
-import org.quicklauncher.contracts.ui.LauncherTheme
 import org.quicklauncher.contracts.ui.LayoutAction
 import org.quicklauncher.contracts.ui.PreparedContentItem
+import org.quicklauncher.contracts.ui.PreparedIcon
+import org.quicklauncher.contracts.ui.PreparedIconSource
 import org.quicklauncher.contracts.ui.PreparedContentKind
 import org.quicklauncher.contracts.ui.PreparedProfileKind
 import org.quicklauncher.contracts.ui.NotificationIndicator
@@ -74,7 +75,6 @@ import org.quicklauncher.contracts.ui.PreparedContentRenderer
 import org.quicklauncher.contracts.ui.PreparedHostContent
 import org.quicklauncher.contracts.ui.PreparedHostSurface
 import org.quicklauncher.contracts.ui.RenderStatus
-import org.quicklauncher.contracts.ui.ThemeMode
 import org.quicklauncher.contracts.ui.WindowInfo
 import org.quicklauncher.contracts.ui.WindowOrientation
 import org.quicklauncher.host.data.preferences.LauncherPreferences
@@ -96,12 +96,15 @@ import org.quicklauncher.host.runtime.composition.DefaultCompositionEngine
 import org.quicklauncher.host.runtime.composition.PreparedComposition
 import org.quicklauncher.host.runtime.composition.PreparedBlockContent
 import org.quicklauncher.host.runtime.composition.PreparedContentSource
+import org.quicklauncher.host.runtime.composition.SearchPresentationSource
 import org.quicklauncher.host.runtime.catalog.AppCatalogStatus
 import org.quicklauncher.host.runtime.navigation.SpatialNavigationSurface
 import org.quicklauncher.host.runtime.navigation.rememberSpatialNavigationState
 import org.quicklauncher.host.runtime.notifications.NotificationIndicatorState
 import org.quicklauncher.host.runtime.shortcuts.ResolvedShortcutPlacement
 import org.quicklauncher.host.runtime.shortcuts.ShortcutSnapshot
+import org.quicklauncher.host.runtime.theme.ResolvedLauncherTheme
+import org.quicklauncher.host.runtime.theme.LauncherMaterialTheme
 import org.quicklauncher.host.runtime.profile.ProfileCoordinatorState
 import org.quicklauncher.host.runtime.profile.ProfileKind
 import org.quicklauncher.host.runtime.widgets.WidgetCoordinator
@@ -116,6 +119,8 @@ import org.quicklauncher.host.runtime.widgets.WidgetSurfaceResult
 import org.quicklauncher.host.runtime.widgets.WidgetUserAction
 import org.quicklauncher.host.platform.widgets.AndroidWidgetPlatform
 import org.quicklauncher.host.platform.widgets.rememberAndroidWidgetUserActionLauncher
+import org.quicklauncher.host.platform.theme.AndroidIconPackResolver
+import org.quicklauncher.host.platform.theme.AndroidThemeAssetStore
 
 @Composable
 internal fun ProductionCompositionSurface(
@@ -127,6 +132,11 @@ internal fun ProductionCompositionSurface(
     notificationState: NotificationIndicatorState,
     shortcutState: ShortcutSnapshot,
     profileState: ProfileCoordinatorState,
+    resolvedTheme: ResolvedLauncherTheme,
+    fallbackResolvedTheme: ResolvedLauncherTheme,
+    destinationThemes: Map<DestinationId, ResolvedLauncherTheme> = emptyMap(),
+    iconPackResolver: AndroidIconPackResolver? = null,
+    themeAssets: AndroidThemeAssetStore,
     widgetPlatform: AndroidWidgetPlatform? = null,
     widgetCoordinator: WidgetCoordinator? = null,
     widgetTransientEvents: Flow<WidgetTransientEvent> = emptyFlow(),
@@ -134,17 +144,15 @@ internal fun ProductionCompositionSurface(
     onOpenFolder: (ContentItemId) -> Unit,
     onOpenItemActions: (ContentItemId) -> Unit,
     onLaunchShortcut: (ContentItemId) -> Unit,
+    searchPresentations: SearchPresentationSource? = null,
     scope: CoroutineScope,
     modifier: Modifier = Modifier,
 ) {
     val runtimeState by runtime.state.collectAsState()
     val configuration = LocalConfiguration.current
-    val density = LocalDensity.current
-    val dark = isSystemInDarkTheme()
     val preferencesState by (preferences?.state ?: kotlinx.coroutines.flow.flowOf(LauncherPreferences.Default))
         .collectAsState(initial = LauncherPreferences.Default)
     val editorState by editor.state.collectAsState()
-    val reducedMotion = !android.animation.ValueAnimator.areAnimatorsEnabled()
     var snapshot by remember { mutableStateOf<LauncherSnapshot?>(null) }
     var prepared by remember { mutableStateOf<PreparedComposition?>(null) }
     val widgetLifecycle = remember(widgetCoordinator) {
@@ -154,6 +162,7 @@ internal fun ProductionCompositionSurface(
         mutableStateOf<Map<ModuleInstanceId, WidgetSurfaceResult>>(emptyMap())
     }
     var widgetEpoch by remember { mutableStateOf(0) }
+    var preparedIcons by remember { mutableStateOf<Map<ContentItemId, PreparedIcon>>(emptyMap()) }
     val current = runtimeState.currentDestinationId
     val disposed = remember(engine) { AtomicBoolean(false) }
     DisposableEffect(engine) {
@@ -162,6 +171,34 @@ internal fun ProductionCompositionSurface(
             disposed.set(true)
             engine.release()
         }
+    }
+    LaunchedEffect(
+        runtimeState.visibleApps,
+        resolvedTheme.profileId,
+        resolvedTheme.iconPack,
+        iconPackResolver,
+        configuration,
+    ) {
+        val next = linkedMapOf<ContentItemId, PreparedIcon>()
+        for (app in runtimeState.visibleApps.take(MAX_PREPARED_APPLICATION_ICONS)) {
+            val fallback = app.icon ?: continue
+            val resolved = iconPackResolver?.resolve(
+                resolvedTheme.iconPack,
+                resolvedTheme.profileId,
+                app.identity,
+                fallback,
+            )
+                ?: fallback
+            val source = if (resolved == fallback) {
+                PreparedIconSource.APPLICATION
+            } else {
+                PreparedIconSource.ICON_PACK
+            }
+            runCatching { PreparedIcon.of(resolved.bytes(), source) }.getOrNull()?.let { icon ->
+                next[contentItemId(app)] = icon
+            }
+        }
+        preparedIcons = next
     }
 
     LaunchedEffect(current, runtimeState.storeRevision, editorState.revision, widgetEpoch) {
@@ -193,13 +230,14 @@ internal fun ProductionCompositionSurface(
         latest,
         configuration.screenWidthDp,
         configuration.screenHeightDp,
-        density.fontScale,
-        dark,
-        reducedMotion,
+        resolvedTheme,
+        destinationThemes,
+        preparedIcons,
         notificationState,
         shortcutState,
         profileState,
         widgetSurfaces,
+        searchPresentations,
     ) {
         if (current == null || latest == null) null else productionEnvironment(
             apps = runtimeState.visibleApps,
@@ -211,9 +249,10 @@ internal fun ProductionCompositionSurface(
             widgetSurfaces = widgetSurfaces,
             contentRenderer = contentRenderer,
             snapshot = latest,
-            dark = dark,
-            reducedMotion = reducedMotion,
-            textScale = density.fontScale,
+            resolvedTheme = resolvedTheme,
+            fallbackResolvedTheme = fallbackResolvedTheme,
+            destinationThemes = destinationThemes,
+            preparedIcons = preparedIcons,
             widthDp = configuration.screenWidthDp,
             heightDp = configuration.screenHeightDp,
             destinationId = current,
@@ -222,6 +261,7 @@ internal fun ProductionCompositionSurface(
             onOpenFolder = onOpenFolder,
             onOpenItemActions = onOpenItemActions,
             onLaunchShortcut = onLaunchShortcut,
+            searchPresentations = searchPresentations,
             scope = scope,
         )
     }
@@ -259,12 +299,21 @@ internal fun ProductionCompositionSurface(
         SpatialNavigationSurface(
             state = navigation,
             mode = preferencesState.gestureMode,
-            reducedMotion = reducedMotion,
+            reducedMotion = resolvedTheme.theme.reducedMotion,
             modifier = Modifier.fillMaxSize(),
         ) { destinationId ->
-            composition.destinations.singleOrNull { it.destinationId == destinationId }?.Render(
-                Modifier.fillMaxSize(),
-            ) ?: Box(Modifier.fillMaxSize().semantics { contentDescription = "Unavailable destination" })
+            val destinationTheme = destinationThemes[destinationId] ?: fallbackResolvedTheme
+            LauncherMaterialTheme(destinationTheme, rememberThemeTypography(destinationTheme, themeAssets)) {
+                ResolvedThemeBackground(destinationTheme, themeAssets) {
+                    composition.destinations.singleOrNull { it.destinationId == destinationId }?.Render(
+                        Modifier.fillMaxSize(),
+                    ) ?: Box(
+                        Modifier.fillMaxSize().semantics {
+                            contentDescription = "Unavailable destination"
+                        },
+                    )
+                }
+            }
         }
         val mapDescription = stringResource(org.quicklauncher.host.runtime.R.string.map_overview)
         val settingsDescription = stringResource(org.quicklauncher.host.runtime.R.string.launcher_settings)
@@ -739,9 +788,10 @@ internal fun productionEnvironment(
     widgetSurfaces: Map<ModuleInstanceId, WidgetSurfaceResult> = emptyMap(),
     contentRenderer: PreparedContentRenderer = ProductionPreparedContentRenderer,
     snapshot: LauncherSnapshot,
-    dark: Boolean,
-    reducedMotion: Boolean,
-    textScale: Float,
+    resolvedTheme: ResolvedLauncherTheme,
+    fallbackResolvedTheme: ResolvedLauncherTheme = resolvedTheme,
+    destinationThemes: Map<DestinationId, ResolvedLauncherTheme> = emptyMap(),
+    preparedIcons: Map<ContentItemId, PreparedIcon> = emptyMap(),
     widthDp: Int,
     heightDp: Int,
     destinationId: DestinationId,
@@ -750,12 +800,10 @@ internal fun productionEnvironment(
     onOpenFolder: (ContentItemId) -> Unit = {},
     onOpenItemActions: (ContentItemId) -> Unit = {},
     onLaunchShortcut: (ContentItemId) -> Unit = {},
+    searchPresentations: SearchPresentationSource? = null,
     scope: CoroutineScope,
 ): CompositionEnvironment {
     val identities = apps.associate { app -> contentItemId(app) to app.identity }
-    val foreground = if (dark) 0xfff5f5f5L else 0xff161616L
-    val background = if (dark) 0xff161616L else 0xfff5f5f5L
-    val accent = if (dark) 0xffb5c4ffL else 0xff2949a3L
     fun openEditor() {
         scope.launch { editor.dispatch(EditorAction.OpenDestination(destinationId)) }
     }
@@ -775,20 +823,14 @@ internal fun productionEnvironment(
         },
     )
     return CompositionEnvironment(
-        theme = LauncherTheme(
-            if (dark) ThemeMode.DARK else ThemeMode.LIGHT,
-            ArgbColor.of(foreground),
-            ArgbColor.of(background),
-            ArgbColor.of(accent),
-            textScale,
-            reducedMotion = reducedMotion,
-        ),
+        resolvedTheme = resolvedTheme,
+        destinationThemes = destinationThemes,
+        fallbackResolvedTheme = fallbackResolvedTheme,
         window = WindowInfo(
             widthDp.coerceAtLeast(1),
             heightDp.coerceAtLeast(1),
             if (widthDp >= heightDp) WindowOrientation.LANDSCAPE else WindowOrientation.PORTRAIT,
         ),
-        backgroundContrast = BackgroundContrast(7f, 3f, prefersLightForeground = dark),
         editorMode = EditorMode.BROWSING,
         contentSource = productionContentSource(
             snapshot,
@@ -799,11 +841,13 @@ internal fun productionEnvironment(
             profileState = profileState,
             widgetSurfaces = widgetSurfaces,
             indicators = notificationState.asMap(),
+            preparedIcons = preparedIcons,
         ),
         contentRenderer = contentRenderer,
         placeholderRenderer = { issue, renderModifier -> CompositionPlaceholder(issue, renderModifier) },
         layoutActions = actionPolicy.layoutActions,
         blockActions = actionPolicy.blockActions,
+        searchPresentations = searchPresentations ?: SearchPresentationSource { null },
         rendererFailures = actionPolicy.rendererFailures,
     )
 }
@@ -917,6 +961,7 @@ internal fun productionContentSource(
     widgetSurfaces: Map<ModuleInstanceId, WidgetSurfaceResult> = emptyMap(),
     now: ZonedDateTime = ZonedDateTime.now(),
     indicators: Map<ProfilePackageIdentity, NotificationIndicator> = emptyMap(),
+    preparedIcons: Map<ContentItemId, PreparedIcon> = emptyMap(),
 ): PreparedContentSource {
     val shortcutItems = shortcutState.placements.mapNotNull { placement ->
         val available = placement as? ResolvedShortcutPlacement.Available ?: return@mapNotNull null
@@ -943,6 +988,7 @@ internal fun productionContentSource(
             enabled = true,
             profile = if (app.workProfile) PreparedProfileKind.WORK else PreparedProfileKind.PERSONAL,
             indicator = app.eligibleIndicator(indicators),
+            icon = preparedIcons[contentItemId(app)],
         )
     }
     val favoriteItems = apps.filter(LauncherApp::favorite).map { app ->
@@ -954,6 +1000,7 @@ internal fun productionContentSource(
             enabled = true,
             profile = if (app.workProfile) PreparedProfileKind.WORK else PreparedProfileKind.PERSONAL,
             indicator = app.eligibleIndicator(indicators),
+            icon = preparedIcons[contentItemId(app)],
         )
     }
     val folderItems = snapshot.contentItems
@@ -1098,6 +1145,9 @@ private val FAVORITES_BLOCK_ID = ContributionId.parse("org.quicklauncher.block/f
 private val FOLDER_BLOCK_ID = ContributionId.parse("org.quicklauncher.block/folder")
 private val CLOCK_BLOCK_ID = ContributionId.parse("org.quicklauncher.block/clock-date")
 private val WIDGET_BLOCK_ID = ContributionId.parse("org.quicklauncher.block/widget")
+private const val MAX_PREPARED_APPLICATION_ICONS = 512
+private const val MAX_PREPARED_ICON_DIMENSION = 512
+private const val MAX_PREPARED_ICON_PIXELS = 512L * 512L
 
 internal object ProductionPreparedContentRenderer : PreparedContentRenderer {
     @Composable
@@ -1107,13 +1157,35 @@ internal object ProductionPreparedContentRenderer : PreparedContentRenderer {
             NotificationIndicator.Dot -> " •"
             is NotificationIndicator.ApproximateCount -> " ${value.bucket}+"
         }
-        Text(item.label + indicator, modifier = modifier)
+        val bitmap = remember(item.icon) { item.icon?.let(::decodePreparedIcon) }
+        DisposableEffect(bitmap) { onDispose { bitmap?.recycle() } }
+        Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+            bitmap?.let { loaded ->
+                Image(
+                    bitmap = loaded.asImageBitmap(),
+                    contentDescription = null,
+                    modifier = Modifier.size(40.dp).padding(end = 8.dp),
+                )
+            }
+            Text(item.label + indicator)
+        }
     }
 
     @Composable
     override fun RenderSurface(surface: PreparedHostSurface, modifier: Modifier) {
         Text("${surface.kind.name.lowercase()} unavailable", modifier = modifier)
     }
+}
+
+private fun decodePreparedIcon(icon: PreparedIcon): android.graphics.Bitmap? {
+    val bytes = icon.bytes()
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+    if (bounds.outWidth !in 1..MAX_PREPARED_ICON_DIMENSION ||
+        bounds.outHeight !in 1..MAX_PREPARED_ICON_DIMENSION ||
+        bounds.outWidth.toLong() * bounds.outHeight > MAX_PREPARED_ICON_PIXELS
+    ) return null
+    return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
 }
 
 @Composable
@@ -1132,6 +1204,7 @@ internal fun ProductionOnboardingPreview(
     apps: List<LauncherApp>,
     catalogStatus: AppCatalogStatus,
     catalogErrorCode: String?,
+    resolvedTheme: ResolvedLauncherTheme,
     scope: CoroutineScope,
     modifier: Modifier = Modifier,
 ) {
@@ -1141,8 +1214,6 @@ internal fun ProductionOnboardingPreview(
         return
     }
     val configuration = LocalConfiguration.current
-    val density = LocalDensity.current
-    val dark = isSystemInDarkTheme()
     val previewEngine = remember(snapshot) {
         DefaultCompositionEngine(org.quicklauncher.registry.production.productionRegistry, scope)
     }
@@ -1154,25 +1225,16 @@ internal fun ProductionOnboardingPreview(
         apps,
         catalogStatus,
         catalogErrorCode,
-        dark,
-        density.fontScale,
+        resolvedTheme,
         configuration.screenWidthDp,
     ) {
         CompositionEnvironment(
-            theme = LauncherTheme(
-                if (dark) ThemeMode.DARK else ThemeMode.LIGHT,
-                ArgbColor.of(if (dark) 0xfff5f5f5L else 0xff161616L),
-                ArgbColor.of(if (dark) 0xff161616L else 0xfff5f5f5L),
-                ArgbColor.of(if (dark) 0xffb5c4ffL else 0xff2949a3L),
-                density.fontScale,
-                reducedMotion = true,
-            ),
+            resolvedTheme = resolvedTheme,
             window = WindowInfo(
                 configuration.screenWidthDp.coerceAtLeast(1),
                 320,
                 WindowOrientation.PORTRAIT,
             ),
-            backgroundContrast = BackgroundContrast(7f, 3f, prefersLightForeground = dark),
             editorMode = EditorMode.BROWSING,
             contentSource = productionContentSource(snapshot, apps, catalogStatus, catalogErrorCode),
             contentRenderer = ProductionPreparedContentRenderer,

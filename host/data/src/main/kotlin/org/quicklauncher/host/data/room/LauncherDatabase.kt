@@ -19,8 +19,9 @@ import androidx.room3.RoomDatabase
         DestinationBackgroundEntity::class,
         CrashMarkerEntity::class,
         StoreMetadataEntity::class,
+        SearchLaunchHistoryEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
     autoMigrations = [AutoMigration(from = 1, to = 2)],
 )

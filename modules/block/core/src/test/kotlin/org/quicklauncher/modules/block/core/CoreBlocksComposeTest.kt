@@ -5,16 +5,18 @@ package org.quicklauncher.modules.block.core
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
-import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
-import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performCustomAccessibilityActionWithLabel
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import kotlinx.coroutines.CoroutineScope
@@ -28,7 +30,9 @@ import org.junit.runner.RunWith
 import org.quicklauncher.contracts.contribution.ActiveCancellationSignal
 import org.quicklauncher.contracts.contribution.ContributionContext
 import org.quicklauncher.contracts.domain.ContentItemId
+import org.quicklauncher.contracts.domain.ContributionId
 import org.quicklauncher.contracts.domain.ModuleInstanceId
+import org.quicklauncher.contracts.domain.SearchResultId
 import org.quicklauncher.contracts.ui.ActionDispatchResult
 import org.quicklauncher.contracts.ui.ActionSink
 import org.quicklauncher.contracts.ui.BlockAction
@@ -42,6 +46,12 @@ import org.quicklauncher.contracts.ui.PreparedContentRenderer
 import org.quicklauncher.contracts.ui.PreparedHostContent
 import org.quicklauncher.contracts.ui.PreparedHostSurface
 import org.quicklauncher.contracts.ui.PreviewScenario
+import org.quicklauncher.contracts.ui.PreparedSearchResult
+import org.quicklauncher.contracts.ui.SearchPresentation
+import org.quicklauncher.contracts.ui.SearchPresentationAction
+import org.quicklauncher.contracts.ui.SearchPresentationProviderState
+import org.quicklauncher.contracts.ui.SearchPresentationState
+import org.quicklauncher.contracts.ui.SearchPresentationToken
 import org.quicklauncher.contracts.ui.SlotRenderState
 import org.quicklauncher.contracts.ui.SlotRenderer
 import org.quicklauncher.testing.fakes.FakeHostStates
@@ -121,10 +131,36 @@ class CoreBlocksComposeTest {
     }
 
     @Test
-    fun `search block renders a real query control and filters prepared apps`() {
+    fun `search block consumes host prepared results and emits typed query actions`() {
         val instanceId = ModuleInstanceId.parse("org.quicklauncher.instance/search-compose-test")
+        val providerId = ContributionId.parse("org.quicklauncher.search/apps")
+        val actions = mutableListOf<SearchPresentationAction>()
+        val presentation = SearchPresentation(
+            SearchPresentationState(
+                query = "bet",
+                results = listOf(
+                    searchResult(providerId, "alpha", "Alpha", work = true),
+                    searchResult(providerId, "beta", "Beta"),
+                ),
+                providerStates = mapOf(
+                    providerId to SearchPresentationProviderState.READY,
+                    ContributionId.parse("org.quicklauncher.search/contacts") to
+                        SearchPresentationProviderState.DENIED,
+                ),
+                providerLabels = mapOf(
+                    providerId to "Applications",
+                    ContributionId.parse("org.quicklauncher.search/contacts") to "Contacts",
+                ),
+            ),
+            ActionSink { action -> actions += action; ActionDispatchResult.Accepted },
+        )
         val session = SearchBlock.open(
-            ContributionContext(instanceId, SearchCodec.default, ActiveCancellationSignal, scope),
+            ContributionContext(
+                instanceId,
+                SearchConfiguration(minimumCharacters = 4),
+                ActiveCancellationSignal,
+                scope,
+            ),
         )
         compose.setContent {
             session.Render(
@@ -137,13 +173,68 @@ class CoreBlocksComposeTest {
                     EmptySlotRenderer,
                     RecordingContentRenderer(mutableListOf()),
                     ActionSink { ActionDispatchResult.Accepted },
+                    presentation,
                 ),
             )
         }
 
-        compose.onNodeWithText("Search apps").performTextInput("bet")
+        compose.onNodeWithText("bet").performTextInput("a")
         compose.onNodeWithContentDescription("Beta").assertIsDisplayed()
-        compose.onAllNodesWithContentDescription("Alpha").assertCountEquals(0)
+        compose.onNodeWithContentDescription("Alpha, Work").assertIsDisplayed()
+        compose.onNodeWithText("Applications").assertIsDisplayed()
+        compose.onNodeWithText("Contacts: access denied").assertIsDisplayed()
+        assertEquals(listOf(SearchPresentationAction.QueryChanged("abet", 4)), actions)
+    }
+
+    @Test
+    fun `search block supports enter escape and directional focus traversal`() {
+        val instanceId = ModuleInstanceId.parse("org.quicklauncher.instance/search-keys-test")
+        val providerId = ContributionId.parse("org.quicklauncher.search/apps")
+        val first = searchResult(providerId, "first", "First")
+        val second = searchResult(providerId, "second", "Second")
+        val actions = mutableListOf<SearchPresentationAction>()
+        val session = SearchBlock.open(
+            ContributionContext(instanceId, SearchCodec.default, ActiveCancellationSignal, scope),
+        )
+        compose.setContent {
+            session.Render(
+                BlockRenderInput(
+                    instanceId,
+                    state(emptyList(), CompositionState(CompositionRole.CURRENT, isInteractive = true)),
+                    EmptySlotRenderer,
+                    RecordingContentRenderer(mutableListOf()),
+                    ActionSink<BlockAction> { ActionDispatchResult.Accepted },
+                    SearchPresentation(
+                        SearchPresentationState(
+                            query = "fixture",
+                            results = listOf(first, second),
+                            providerStates = mapOf(providerId to SearchPresentationProviderState.READY),
+                        ),
+                        ActionSink { action -> actions += action; ActionDispatchResult.Accepted },
+                    ),
+                ),
+            )
+        }
+
+        compose.onNodeWithContentDescription("Search input").performClick()
+            .performKeyInput { pressKey(Key.Enter) }
+        compose.onNodeWithContentDescription("Search input").performKeyInput {
+            pressKey(Key.DirectionDown)
+        }
+        compose.onNodeWithContentDescription("First").assertIsFocused()
+            .performKeyInput { pressKey(Key.DirectionDown) }
+        compose.onNodeWithContentDescription("Second").assertIsFocused()
+            .performKeyInput { pressKey(Key.DirectionUp) }
+        compose.onNodeWithContentDescription("First").assertIsFocused()
+            .performKeyInput { pressKey(Key.Escape) }
+
+        assertEquals(
+            listOf(
+                SearchPresentationAction.Activate(first.token),
+                SearchPresentationAction.Dismiss,
+            ),
+            actions,
+        )
     }
 
     @Test
@@ -274,6 +365,24 @@ class CoreBlocksComposeTest {
         null,
         PreparedContentKind.APP,
         enabled = true,
+    )
+
+    private fun searchResult(
+        providerId: ContributionId,
+        local: String,
+        title: String,
+        work: Boolean = false,
+    ) = PreparedSearchResult(
+        SearchPresentationToken(
+            1L,
+            1L,
+            providerId,
+            SearchResultId.parse("org.quicklauncher.search.apps/$local"),
+        ),
+        "Applications",
+        title,
+        null,
+        work,
     )
 }
 

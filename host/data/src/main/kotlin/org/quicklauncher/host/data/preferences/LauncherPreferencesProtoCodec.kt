@@ -34,6 +34,7 @@ internal object LauncherPreferencesProtoCodec {
                 else -> error("Unknown gesture mode ${value.gestureMode}")
             },
             enabledSearchProviders = value.enabledSearchProviderIdsList.map(ContributionId::parse),
+            searchProvidersInitialized = value.searchProvidersInitialized,
             historyPolicy = when (value.historyPolicy) {
                 StoredHistoryPolicy.STORED_HISTORY_POLICY_DISABLED -> HistoryPolicy.DISABLED
                 StoredHistoryPolicy.STORED_HISTORY_POLICY_LOCAL -> HistoryPolicy.LOCAL
@@ -85,6 +86,7 @@ internal object LauncherPreferencesProtoCodec {
             .addAllEnabledSearchProviderIds(
                 value.enabledSearchProviders.map { it.value }.sorted(),
             )
+            .setSearchProvidersInitialized(value.searchProvidersInitialized)
             .setHistoryPolicy(
                 when (value.historyPolicy) {
                     HistoryPolicy.DISABLED -> StoredHistoryPolicy.STORED_HISTORY_POLICY_DISABLED

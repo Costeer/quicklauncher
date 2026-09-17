@@ -102,6 +102,7 @@ class BlockDescriptor(
     compatibleSlotTypes: Collection<SlotTypeId>,
     childSlots: Collection<SlotDescriptor>,
     occupiedScrollAxes: Collection<ScrollAxis> = emptySet(),
+    val requiresSearchPresentation: Boolean = false,
 ) : ContributionDescriptor {
     val compatibleSlotTypes: Set<SlotTypeId> = immutableDescriptorSet(compatibleSlotTypes)
     val childSlots: List<SlotDescriptor> = immutableDescriptorList(childSlots)

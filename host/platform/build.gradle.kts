@@ -14,6 +14,7 @@ android {
 }
 
 dependencies {
+    api(project(":contracts:contribution"))
     api(project(":host:data"))
     api(project(":host:runtime"))
     api(project(":contracts:domain"))
@@ -27,6 +28,10 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.androidx.test.ext.junit)
+    testImplementation(libs.androidx.test.monitor)
+    testImplementation(libs.robolectric.annotations)
+    testRuntimeOnly(libs.robolectric)
 
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.monitor)

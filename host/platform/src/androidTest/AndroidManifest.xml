@@ -1,5 +1,18 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.WRITE_CONTACTS" />
+
     <application>
+        <activity
+            android:name="org.quicklauncher.host.platform.theme.PhaseSevenFixtureIconPackActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.novalauncher.THEME" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="org.adw.launcher.THEMES" />
+            </intent-filter>
+        </activity>
+
         <activity
             android:name="org.quicklauncher.host.platform.shortcuts.PhaseFiveFixtureShortcutActivity"
             android:exported="true">
@@ -25,5 +38,27 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/phase_five_fixture_widget_info" />
         </receiver>
+
+        <provider
+            android:name="org.quicklauncher.host.platform.search.PhaseSixFixtureDocumentsProvider"
+            android:authorities="org.quicklauncher.host.platform.test.phase6.documents"
+            android:exported="true"
+            android:grantUriPermissions="true"
+            android:permission="android.permission.MANAGE_DOCUMENTS">
+            <intent-filter>
+                <action android:name="android.content.action.DOCUMENTS_PROVIDER" />
+            </intent-filter>
+        </provider>
+
+        <provider
+            android:name="org.quicklauncher.host.platform.theme.PhaseSevenFixtureDocumentsProvider"
+            android:authorities="org.quicklauncher.host.platform.test.phase7.documents"
+            android:exported="true"
+            android:grantUriPermissions="true"
+            android:permission="android.permission.MANAGE_DOCUMENTS">
+            <intent-filter>
+                <action android:name="android.content.action.DOCUMENTS_PROVIDER" />
+            </intent-filter>
+        </provider>
     </application>
 </manifest>

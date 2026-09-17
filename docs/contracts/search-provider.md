@@ -4,17 +4,19 @@ Type `org.quicklauncher.contribution/search-provider`, code-contract major `1`. 
 
 ## Interface
 
-`SearchProviderContribution<C>.open` creates one session for one visible host search session. `updateQuery` replaces prior work; `results` emits fresh immutable snapshots; `close` is idempotent and prevents later output.
+`SearchProviderContribution<C>.open` creates one session for one visible host search session. Production sessions implement `GenerationAwareSearchProviderSession`: `update` receives the host generation, validated query, and an immutable host-prepared candidate snapshot; `snapshots` repeats that generation with each immutable result snapshot. The older `updateQuery` and `results` members remain the major-1 compatibility surface, but the production host fails a provider closed unless it supplies generation-aware snapshots. Replacement cancels prior work, and `close` is idempotent and prevents later output.
 
 `SearchProviderDescriptor` declares a nonempty set of result kinds and a nonnegative minimum query length. Supported kinds are app, shortcut, contact, file, setting, web, command, and information. Queries are at most 512 characters and contain no null character.
 
 Each result has a stable ID, display text, a declared kind, relevance from 0 through 1,000, and a typed action. Actions either name a `SearchActionId` or a registered launcher command. They contain no intent or callback.
 
+`SearchProviderResultIds` is the canonical mapping from provider identity to result identity. It converts hyphens in the provider-local name to reverse-DNS separators; providers and hosts do not construct or route result namespaces with raw strings.
+
 ## Ownership and validation
 
-The host owns enablement, permissions, query debouncing, fan-out, timeouts, profile filtering, ranking, history, presentation, and action execution. Providers retain no raw query history and cannot delay healthy providers.
+The host owns candidate preparation, enablement, permissions, query debouncing, fan-out, timeouts, profile filtering, ranking, history, presentation, and action execution. Providers retain no raw query history and cannot delay healthy providers. Host-prepared candidates contain no Android type and exclude every profile that is locked, hidden, quiet, unavailable, private, or policy-ambiguous before crossing the contribution seam.
 
-Validation rejects undeclared kinds, duplicate result IDs, invalid relevance, stale or post-close output, and command actions that do not resolve. Configuration failure disables only that provider. Flow failure becomes provider-local error state; cancellation and query replacement are not failures.
+Validation rejects undeclared kinds, duplicate result IDs, invalid relevance, a generation different from the current request, stale or post-close output, and command actions that do not resolve. Configuration failure disables only that provider. Flow failure becomes provider-local error state; cancellation and query replacement are not failures.
 
 ## Evidence and evolution
 

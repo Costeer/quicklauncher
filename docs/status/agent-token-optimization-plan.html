@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quicklauncher agent token optimization plan</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b0f0d;
+      --panel: #111714;
+      --panel-2: #171f1b;
+      --line: #2b3831;
+      --text: #eef4ef;
+      --muted: #9bac9f;
+      --green: #a7f3c1;
+      --green-strong: #4ade80;
+      --amber: #f4cd73;
+      --red: #ff8b7c;
+      --blue: #91c7ff;
+      --max: 1180px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 85% 0%, rgba(74, 222, 128, 0.09), transparent 31rem),
+        var(--bg);
+      color: var(--text);
+      font: 15px/1.55 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    a { color: var(--green); }
+    button { font: inherit; }
+    .wrap { width: min(calc(100% - 32px), var(--max)); margin: 0 auto; }
+    .eyebrow { color: var(--green-strong); text-transform: uppercase; letter-spacing: .14em; font-size: 12px; }
+    .muted { color: var(--muted); }
+    .number { font-variant-numeric: tabular-nums; }
+
+    header { padding: 72px 0 38px; border-bottom: 1px solid var(--line); }
+    header h1 {
+      max-width: 900px;
+      margin: 14px 0 20px;
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      font-size: clamp(38px, 7vw, 76px);
+      line-height: .96;
+      letter-spacing: -.055em;
+    }
+    header .lede { max-width: 850px; color: #c7d4ca; font-size: 18px; }
+    .meta { display: flex; flex-wrap: wrap; gap: 12px 28px; margin-top: 26px; color: var(--muted); }
+
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      border-bottom: 1px solid var(--line);
+      background: rgba(11, 15, 13, .92);
+      backdrop-filter: blur(14px);
+    }
+    nav .wrap { display: flex; gap: 8px; overflow-x: auto; padding: 10px 0; }
+    nav a {
+      flex: 0 0 auto;
+      padding: 7px 11px;
+      color: var(--muted);
+      border: 1px solid transparent;
+      border-radius: 6px;
+      text-decoration: none;
+    }
+    nav a:hover { color: var(--text); border-color: var(--line); }
+
+    main { padding: 52px 0 100px; }
+    section { scroll-margin-top: 76px; margin-bottom: 76px; }
+    h2, h3 { font-family: Inter, ui-sans-serif, system-ui, sans-serif; letter-spacing: -.025em; }
+    h2 { margin: 0 0 10px; font-size: clamp(28px, 4vw, 44px); }
+    h3 { margin: 0 0 8px; font-size: 19px; }
+    .section-intro { max-width: 820px; margin: 0 0 28px; color: var(--muted); }
+
+    .grid { display: grid; gap: 14px; }
+    .metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: linear-gradient(145deg, rgba(23, 31, 27, .9), rgba(17, 23, 20, .92));
+      padding: 20px;
+    }
+    .metric .value { margin: 6px 0 3px; font-size: clamp(25px, 3vw, 37px); font-weight: 750; letter-spacing: -.045em; }
+    .metric .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .09em; }
+    .metric .note { margin-top: 8px; color: #c3d0c6; font-size: 13px; }
+
+    .callout {
+      margin: 18px 0 0;
+      padding: 20px 22px;
+      border-left: 4px solid var(--amber);
+      background: rgba(244, 205, 115, .07);
+    }
+    .callout strong { color: var(--amber); }
+
+    .split { grid-template-columns: minmax(0, 1.18fr) minmax(300px, .82fr); align-items: start; }
+    .bars { display: grid; gap: 17px; }
+    .bar-row { display: grid; gap: 7px; }
+    .bar-head { display: flex; justify-content: space-between; gap: 16px; }
+    .track { height: 13px; overflow: hidden; border-radius: 99px; background: #202a24; }
+    .fill { height: 100%; width: var(--w); border-radius: inherit; background: var(--green-strong); }
+    .fill.amber { background: var(--amber); }
+    .fill.blue { background: var(--blue); }
+    .fill.red { background: var(--red); }
+    .legend { margin: 18px 0 0; padding: 0; list-style: none; color: var(--muted); font-size: 13px; }
+    .legend li { margin: 7px 0; }
+    .legend code { color: var(--text); }
+
+    .finding-list { display: grid; gap: 14px; counter-reset: finding; }
+    .finding { position: relative; padding-left: 72px; }
+    .finding::before {
+      counter-increment: finding;
+      content: counter(finding, decimal-leading-zero);
+      position: absolute;
+      left: 20px;
+      top: 19px;
+      color: var(--green-strong);
+      font-size: 13px;
+    }
+    .finding p { margin: 8px 0; color: #c7d2ca; }
+    .evidence { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 13px; }
+    .tag { padding: 4px 8px; border: 1px solid var(--line); border-radius: 5px; color: var(--muted); font-size: 12px; }
+
+    .plan { display: grid; gap: 0; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+    .step { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 24px; padding: 25px; background: var(--panel); }
+    .step + .step { border-top: 1px solid var(--line); }
+    .step .when { color: var(--green-strong); font-weight: 700; }
+    .step ul { margin: 12px 0 0; padding-left: 20px; color: #c8d4cb; }
+    .step li + li { margin-top: 7px; }
+    .deliverable { margin-top: 13px; color: var(--amber); }
+
+    .budget { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .budget .card { padding: 0; overflow: hidden; }
+    .budget h3 { padding: 18px 20px 0; }
+    .budget table { margin-top: 8px; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 11px 14px; border-top: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-weight: 500; }
+    td:last-child, th:last-child { text-align: right; }
+    .good { color: var(--green); }
+    .warn { color: var(--amber); }
+    .bad { color: var(--red); }
+
+    details { border-top: 1px solid var(--line); }
+    details:first-of-type { border-top: 0; }
+    summary { cursor: pointer; padding: 16px 18px; color: #dce7de; }
+    details > div { padding: 0 18px 18px; color: var(--muted); }
+    details p { margin: 7px 0; }
+    code { color: #d9fce4; }
+
+    .decision {
+      padding: 28px;
+      border: 1px solid var(--green-strong);
+      border-radius: 9px;
+      background: rgba(74, 222, 128, .06);
+    }
+    .decision h3 { font-size: 26px; }
+    .decision ol { margin: 18px 0 0; padding-left: 22px; }
+    .decision li + li { margin-top: 9px; }
+
+    footer { padding: 26px 0 45px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+
+    @media (max-width: 860px) {
+      .metrics, .budget, .split { grid-template-columns: 1fr 1fr; }
+      .split > :first-child { grid-column: 1 / -1; }
+      .step { grid-template-columns: 1fr; gap: 7px; }
+    }
+    @media (max-width: 580px) {
+      .metrics, .budget, .split { grid-template-columns: 1fr; }
+      header { padding-top: 46px; }
+      .finding { padding-left: 20px; padding-top: 49px; }
+      .finding::before { top: 18px; }
+      th, td { padding: 9px 10px; }
+    }
+    @media print {
+      :root { color-scheme: light; --bg: white; --panel: white; --panel-2: #f5f7f5; --line: #cbd3cd; --text: #111; --muted: #4d5a51; }
+      body { background: white; color: #111; }
+      nav { display: none; }
+      .card, .step { background: white; break-inside: avoid; }
+      section { margin-bottom: 36px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="eyebrow">Process audit / 2026-09-17</div>
+      <h1>Quicklauncher is paying for context, over and over.</h1>
+      <p class="lede">The agents are not wasting most tokens on prose. They are carrying very large working contexts through long implementation turns, repeated audits, full repository scans, test reruns, image payloads, and short interval polling. The fix is to bound work units and preserve evidence outside the conversation.</p>
+      <div class="meta">
+        <span>103 session files inspected</span>
+        <span>235 unique completed turns</span>
+        <span>2026-06-06 through 2026-09-16</span>
+        <span>Local Codex records only</span>
+      </div>
+    </div>
+  </header>
+
+  <nav aria-label="Report sections">
+    <div class="wrap">
+      <a href="#snapshot">Snapshot</a>
+      <a href="#distribution">Distribution</a>
+      <a href="#findings">Findings</a>
+      <a href="#plan">Plan</a>
+      <a href="#implemented">Implemented</a>
+      <a href="#budgets">Budgets</a>
+      <a href="#method">Method</a>
+    </div>
+  </nav>
+
+  <main class="wrap">
+    <section id="snapshot">
+      <h2>Measured snapshot</h2>
+      <p class="section-intro">These are marginal token counts for unique completed turns. Copied parent history in forked T3Code transcripts has been removed.</p>
+      <div class="grid metrics">
+        <article class="card metric">
+          <div class="label">Recorded tokens</div>
+          <div class="value number">1.492B</div>
+          <div class="note">1.488B input and 3.74M output</div>
+        </article>
+        <article class="card metric">
+          <div class="label">Cached input</div>
+          <div class="value number">97.6%</div>
+          <div class="note">1.452B input tokens were cached</div>
+        </article>
+        <article class="card metric">
+          <div class="label">Model steps</div>
+          <div class="value number">11,661</div>
+          <div class="note">49.6 steps per completed turn</div>
+        </article>
+        <article class="card metric">
+          <div class="label">Tool output</div>
+          <div class="value number">96.3MB</div>
+          <div class="note">Returned into conversation context</div>
+        </article>
+      </div>
+      <div class="callout">
+        <strong>Interpretation.</strong> This is a token usage audit, not a billing estimate. Cached tokens may be priced or quota counted differently by the provider. They still show how much context the model processed.
+      </div>
+    </section>
+
+    <section id="distribution">
+      <h2>Spend is concentrated in a few runaway turns</h2>
+      <p class="section-intro">The median completed turn used 1.69M tokens. The 90th percentile used 14.61M. One Phase 6 turn reached 157.48M.</p>
+      <div class="grid split">
+        <article class="card">
+          <h3>Share of all recorded tokens</h3>
+          <div class="bars" style="margin-top: 20px">
+            <div class="bar-row">
+              <div class="bar-head"><span>Largest turn</span><span class="number">10.6%</span></div>
+              <div class="track"><div class="fill red" style="--w:10.6%"></div></div>
+            </div>
+            <div class="bar-row">
+              <div class="bar-head"><span>Largest 10 turns</span><span class="number">41.6%</span></div>
+              <div class="track"><div class="fill amber" style="--w:41.6%"></div></div>
+            </div>
+            <div class="bar-row">
+              <div class="bar-head"><span>Largest 20 turns</span><span class="number">58.6%</span></div>
+              <div class="track"><div class="fill amber" style="--w:58.6%"></div></div>
+            </div>
+            <div class="bar-row">
+              <div class="bar-head"><span>Largest 50 turns</span><span class="number">81.2%</span></div>
+              <div class="track"><div class="fill" style="--w:81.2%"></div></div>
+            </div>
+          </div>
+        </article>
+        <article class="card">
+          <h3>Root and worker agents</h3>
+          <div class="bars" style="margin-top: 20px">
+            <div class="bar-row">
+              <div class="bar-head"><span>Root agents</span><span class="number">1.107B</span></div>
+              <div class="track"><div class="fill" style="--w:74.2%"></div></div>
+            </div>
+            <div class="bar-row">
+              <div class="bar-head"><span>Spawned agents</span><span class="number">384.6M</span></div>
+              <div class="track"><div class="fill blue" style="--w:25.8%"></div></div>
+            </div>
+            <div class="bar-row">
+              <div class="bar-head"><span>Review and audit workers</span><span class="number">233.6M</span></div>
+              <div class="track"><div class="fill amber" style="--w:15.7%"></div></div>
+            </div>
+          </div>
+        </article>
+      </div>
+      <ul class="legend">
+        <li><code>2026-08-22 to 2026-08-26</code> used 495.3M tokens, 33.2% of the sample.</li>
+        <li><code>2026-09-14 to 2026-09-16</code> used 428.2M tokens, 28.7% of the sample.</li>
+        <li>Those two short windows account for 61.9% of all measured usage.</li>
+      </ul>
+    </section>
+
+    <section id="findings">
+      <h2>Why the agents burn tokens</h2>
+      <p class="section-intro">The strongest causes are visible in both the session records and the repository's agent facing documents.</p>
+      <div class="finding-list">
+        <article class="card finding">
+          <h3>Broad goals run inside one turn for hours</h3>
+          <p>The largest turn began after the user said a GrapheneOS device was attached. The agent inherited the full Phase 6 objective, worked for 4.6 hours, made 1,112 tool calls, and used 157.48M tokens. The final message describes an 88 file implementation and two full verification gates.</p>
+          <p>Long turns compound context cost because each model step sees the accumulated transcript. The average model step in this sample processed 118,350 input tokens.</p>
+          <div class="evidence"><span class="tag">157.48M tokens</span><span class="tag">1,112 tools</span><span class="tag">4h 36m</span><span class="tag">88 file phase</span></div>
+        </article>
+
+        <article class="card finding">
+          <h3>Review is repeated as a workflow, not applied as a checkpoint</h3>
+          <p>The local <code>implement</code> skill always hands completed work to <code>code-review</code>. That review always spawns standards and spec agents. The history adds audit, remediation audit, final audit, recheck, and post-fix review workers around the same large diffs.</p>
+          <p>Seventy completed review-family worker turns used 233.59M tokens. This excludes the root agent's coordination and remediation work, so it understates the full review loop cost.</p>
+          <div class="evidence"><span class="tag">70 review turns</span><span class="tag">15.7% of all tokens</span><span class="tag">74 spawns</span><span class="tag">10 depth 2 or 3 turns</span></div>
+        </article>
+
+        <article class="card finding">
+          <h3>Validation packets demand wide rereads</h3>
+          <p>The Phase 6 validation prompt tells each reviewer to read every accepted ADR, long architecture and status documents, the full evidence report, research, contracts, CI, the current diff, and every listed untracked file. The named prose is roughly 15,000 words before source code and diff inspection.</p>
+          <p>The transcript contains 3,241 full file read patterns, 628 <code>git diff</code> mentions, and 304 <code>git status</code> mentions. Reopening the same large evidence base is expensive and makes the real acceptance criteria harder to find.</p>
+          <div class="evidence"><span class="tag">31 ADRs</span><span class="tag">15K words before code</span><span class="tag">3,241 file reads</span><span class="tag">628 diff reads</span></div>
+        </article>
+
+        <article class="card finding">
+          <h3>Tool results are returned at full size</h3>
+          <p>Unique completed turns returned 96.3MB of tool data into context. Reads and searches account for 41.0MB. Images account for 15.6MB across only 59 calls because original resolution images are carried as base64. Gradle accounts for another 8.1MB.</p>
+          <p>Several visual reviews load multiple original resolution contact sheets. Large build and diff outputs then stay in the conversation for later model steps.</p>
+          <div class="evidence"><span class="tag">41.0MB reads/search</span><span class="tag">15.6MB images</span><span class="tag">8.1MB Gradle</span><span class="tag">3.3MB diffs</span></div>
+        </article>
+
+        <article class="card finding">
+          <h3>Build waits create model churn</h3>
+          <p>The sample has 2,674 wait or poll outputs and 10.1MB of returned polling data. Exact one second polls recur dozens of times for the same process. Each poll can require another model step even when nothing useful changed.</p>
+          <p>Gradle setup is also repeated inline with long Nix store paths and environment exports. The transcript contains 1,141 Gradle command mentions and many near identical environment prefixes.</p>
+          <div class="evidence"><span class="tag">2,674 polls</span><span class="tag">10.1MB poll output</span><span class="tag">1 second loops</span><span class="tag">1,141 Gradle mentions</span></div>
+        </article>
+
+        <article class="card finding">
+          <h3>The fixed prompt is visible, but it is not the main problem</h3>
+          <p>Base instructions are about 2,826 words in the recent sessions. That is worth pruning at the platform level, but it is small beside an average 118K token model input and it is usually cached. Cutting repository skill descriptions first would miss the expensive part.</p>
+          <p>The high value work is to shorten live transcripts, narrow the files each worker reads, and stop repeated verification.</p>
+          <div class="evidence"><span class="tag">2,826 base words</span><span class="tag">118K input per model step</span><span class="tag">97.6% cached</span></div>
+        </article>
+
+        <article class="card finding">
+          <h3>Naive accounting multiplies shared history</h3>
+          <p>T3Code fork and resume files include copied parent events. Summing each file's final cumulative total produces 7.80B tokens, more than five times the deduplicated result. Any dashboard built on file totals will point at the wrong sessions and hide whether changes worked.</p>
+          <p>Usage reporting must deduplicate by turn ID and use the change in cumulative counters during each turn.</p>
+          <div class="evidence"><span class="tag">7.80B naive</span><span class="tag">1.492B deduplicated</span><span class="tag">5.2× overcount</span></div>
+        </article>
+      </div>
+    </section>
+
+    <section id="plan">
+      <h2>Optimization plan</h2>
+      <p class="section-intro">Apply these in order. The first two steps prevent another 157M token turn. Later steps reduce the cost of normal work.</p>
+      <div class="plan">
+        <article class="step">
+          <div class="when">1. Measure</div>
+          <div>
+            <h3>Add a trustworthy usage report</h3>
+            <ul>
+              <li>Create <code>tools/agent-usage-report.py</code>. Read local Codex JSONL, keep the earliest owner of each turn ID, and calculate marginal input, cached input, output, duration, tool count, and tool output bytes.</li>
+              <li>Print top turns, root versus worker usage, review-family usage, and threshold breaches. Export JSON for later comparisons.</li>
+              <li>Record the current 1.492B pre-implementation sample as the audit baseline. Never sum transcript file totals.</li>
+            </ul>
+            <div class="deliverable">Done when the script reproduces the figures in this report within rounding.</div>
+          </div>
+        </article>
+
+        <article class="step">
+          <div class="when">2. Bound</div>
+          <div>
+            <h3>Turn phases into small execution packets</h3>
+            <ul>
+              <li>Give each packet one to three acceptance IDs, a narrow file area, focused tests, and an explicit packet acceptance condition.</li>
+              <li>At 8M recorded tokens, 75 model steps, 100 tool calls, or 45 minutes, record a compact checkpoint and delegate the next context-heavy slice. The main agent keeps ownership of the full request.</li>
+              <li>Never let a hardware status update resume an entire open phase. Resume only the blocked acceptance ID.</li>
+              <li>Keep each packet near 15 changed files. Split cross-cutting changes by contract, implementation, integration, and evidence when practical.</li>
+            </ul>
+            <div class="deliverable">Done when the next phase has a packet manifest and no packet can silently expand to the whole phase.</div>
+          </div>
+        </article>
+
+        <article class="step">
+          <div class="when">3. Narrow</div>
+          <div>
+            <h3>Replace full rereads with an acceptance index</h3>
+            <ul>
+              <li>Create a short phase brief that maps each acceptance ID to its governing ADR sections, contract sections, source paths, tests, and evidence.</li>
+              <li>Validation agents read the indexed sections for their assigned IDs. They open another ADR only when a concrete conflict points there.</li>
+              <li>Generate the changed file inventory with a command. Keep prose for decisions and evidence that commands cannot recover.</li>
+              <li>Keep the phase brief below 1,000 words. Move command logs and large manifests to machine readable artifacts.</li>
+            </ul>
+            <div class="deliverable">Done when a worker can begin from one brief without reading every ADR and status document.</div>
+          </div>
+        </article>
+
+        <article class="step">
+          <div class="when">4. Delegate</div>
+          <div>
+            <h3>Use depth-one workers for bounded context</h3>
+            <ul>
+              <li>Delegate every high-output operation to a subagent: work expected to produce more than 200 lines or 20 KB, including full builds or tests, broad searches, complete diffs, long logs or documents, and device matrices. Use parallel workers when their acceptance IDs or file areas are independent; do not impose a fixed worker count.</li>
+              <li>Use the two review axes once per release candidate. After fixes, rerun only the affected axis and focused tests.</li>
+              <li>Require subagents to save full evidence in files and report no more than 400 words to the main agent. Bounded-summary wrappers may run in the main agent.</li>
+              <li>Route simple mechanical file changes with exact acceptance criteria to lower-reasoning subagents when model choice is available.</li>
+              <li>Do not assign several workers to scan the same full diff. The root owns the shared inventory and hands each worker a slice.</li>
+              <li>The main agent owns integration and completion. Subagent reports are progress, not completion; there is no fixed subagent cap.</li>
+            </ul>
+            <div class="deliverable">Done when every worker has a disjoint scope, reports compact evidence to the main agent, and the main agent integrates every result before completion.</div>
+          </div>
+        </article>
+
+        <article class="step">
+          <div class="when">5. Verify</div>
+          <div>
+            <h3>Make test scope follow change scope</h3>
+            <ul>
+              <li>Run one focused test command while editing. Run the full local gate once after the packet set is integrated.</li>
+              <li>Run Paparazzi once for the release candidate. Inspect a single contact sheet at normal detail and reopen only changed or suspicious images.</li>
+              <li>Run each device matrix once when its prerequisite is present. Persist the serial, command, result, and repository state hash.</li>
+              <li>After a failure, rerun the failing task. Repeat the full gate only after a change that can affect the full gate.</li>
+            </ul>
+            <div class="deliverable">Done when the verification ledger shows why each full gate was run.</div>
+          </div>
+        </article>
+
+        <article class="step">
+          <div class="when">6. Trim</div>
+          <div>
+            <h3>Reduce command and result payloads</h3>
+            <ul>
+              <li>Add one repository command that supplies the JDK and Android SDK environment, so prompts stop repeating Nix store paths.</li>
+              <li>Write full build output to a temporary log. Return task counts, test counts, duration, status, and the failure tail.</li>
+              <li>Use bounded <code>rg</code>, line ranges, and file lists. Save large diffs to a file and inspect selected hunks.</li>
+              <li>Poll long commands every 20 to 30 seconds. Wait on workers for minutes, with asynchronous status updates, rather than one second loops.</li>
+              <li>Load image montages at normal detail. Use original detail only for a region where pixel accuracy decides the result.</li>
+            </ul>
+            <div class="deliverable">Done when a comparable phase returns less than 30MB of tool output.</div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section id="implemented">
+      <h2>Controls implemented</h2>
+      <p class="section-intro">The repository now carries the process instead of relying on this report as a reminder.</p>
+      <div class="grid metrics">
+        <article class="card metric">
+          <div class="label">Measurement</div>
+          <div class="value">Deduplicated</div>
+          <div class="note"><code>tools/agent_usage_report.py</code> assigns each turn to its earliest transcript and reports marginal usage.</div>
+        </article>
+        <article class="card metric">
+          <div class="label">Execution</div>
+          <div class="value">Packeted</div>
+          <div class="note">Root instructions use 8M tokens, 75 steps, 100 tools, and 45 minutes as checkpoint and delegation triggers. They do not end the task.</div>
+        </article>
+        <article class="card metric">
+          <div class="label">Validation</div>
+          <div class="value">Indexed</div>
+          <div class="note">Phase acceptance IDs now point to governing sections instead of every ADR and status document.</div>
+        </article>
+        <article class="card metric">
+          <div class="label">Verification</div>
+          <div class="value">One pass</div>
+          <div class="note">The Gradle wrapper summarizes logs and the ledger reuses matching release-candidate results.</div>
+        </article>
+      </div>
+      <div class="callout">
+        <strong>Post-audit baseline.</strong> The machine-readable aggregate is in <a href="agent-token-baseline.json">agent-token-baseline.json</a>. It records 1.514B tokens across 238 completed turns after including the audit work. Phase 8 has a bounded packet manifest in <a href="phase-8-packets.md">phase-8-packets.md</a>.
+      </div>
+    </section>
+
+    <section id="budgets">
+      <h2>Budgets and success checks</h2>
+      <p class="section-intro">These are operating limits for the next comparable phase. Quality gates stay in place.</p>
+      <div class="grid budget">
+        <article class="card">
+          <h3>Per packet limits</h3>
+          <table>
+            <thead><tr><th>Measure</th><th>Limit</th></tr></thead>
+            <tbody>
+              <tr><td>Recorded tokens</td><td class="good">8M</td></tr>
+              <tr><td>Model steps</td><td class="good">75</td></tr>
+              <tr><td>Tool calls</td><td class="good">100</td></tr>
+              <tr><td>Wall time</td><td class="good">45 min</td></tr>
+              <tr><td>Worker depth</td><td class="good">1</td></tr>
+              <tr><td>Changed files</td><td class="warn">about 15</td></tr>
+            </tbody>
+          </table>
+        </article>
+        <article class="card">
+          <h3>Thirty day targets</h3>
+          <table>
+            <thead><tr><th>Measure</th><th>Target</th></tr></thead>
+            <tbody>
+              <tr><td>Median turn</td><td class="good">≤ 1.2M</td></tr>
+              <tr><td>90th percentile turn</td><td class="good">≤ 6M</td></tr>
+              <tr><td>Largest turn</td><td class="good">≤ 10M</td></tr>
+              <tr><td>High-output delegation</td><td class="good">100%</td></tr>
+              <tr><td>Review-family share</td><td class="good">≤ 10%</td></tr>
+              <tr><td>Tool output per phase</td><td class="good">≤ 30MB</td></tr>
+            </tbody>
+          </table>
+        </article>
+      </div>
+      <div class="callout">
+        <strong>Why 8M?</strong> Forty-four turns exceeded that line. In this sample, 818.44M tokens sit above the 8M checkpoint. That 54.9% is an exposure estimate, not a savings forecast. Delegated work must return less context than it reads or splitting work will only move the cost.
+      </div>
+      <div class="decision" style="margin-top: 18px">
+        <h3>Start with these three changes</h3>
+        <ol>
+          <li>Land the deduplicating usage report.</li>
+          <li>Write the next phase as acceptance packets with 8M, 75 step, 100 tool, and 45 minute checkpoint triggers. Keep the main agent responsible through the final gate.</li>
+          <li>Change validation prompts so reviewers receive indexed sections and one diff slice, then run the full gate once.</li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="method">
+      <h2>Method and evidence</h2>
+      <p class="section-intro">The audit used local records and repository files. No network source or provider pricing table was used.</p>
+      <div class="card" style="padding: 0">
+        <details open>
+          <summary>How usage was deduplicated</summary>
+          <div>
+            <p>Session files were selected when their metadata named <code>/home/costeer/git/quicklauncher</code> as the working directory.</p>
+            <p>Forked and resumed files contain copied history. Each completed <code>turn_id</code> was assigned to the earliest transcript containing its start event. Usage sums each positive change in the cumulative counters. When compaction resets a counter, accumulation restarts from the new value.</p>
+            <p>Incomplete and aborted turns were excluded. The current audit turn is not in the sample.</p>
+          </div>
+        </details>
+        <details>
+          <summary>What the token fields mean here</summary>
+          <div>
+            <p><code>total_tokens</code> equals input plus output in these records. Reasoning output is a subset of output and is not added again. Cached input is shown as a share of input.</p>
+            <p>The records report 1,488,155,597 input tokens, 1,452,319,232 cached input tokens, 3,740,564 output tokens, and 1,491,896,088 total tokens.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Repository sources inspected</summary>
+          <div>
+            <p><a href="../../.agents/skills/implement/SKILL.md">implement skill</a>, <a href="../../.agents/skills/code-review/SKILL.md">code review skill</a>, <a href="phase-6-validation-prompt.md">Phase 6 validation prompt</a>, <a href="phase-7-validation-prompt.md">Phase 7 validation prompt</a>, <a href="current-state.md">current state</a>, accepted ADRs, phase evidence, architecture, contracts, research, CI, and the local skill catalog.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Limits of the analysis</summary>
+          <div>
+            <p>The audit measures recorded tokens, not money. It does not assign tokens to individual repository files. Tool output bytes are serialized transcript size, so image base64 and wrapper metadata are included. The review-family classification uses worker path names containing terms such as review, audit, recheck, final, requirements, or checklist.</p>
+          </div>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">Quicklauncher agent process audit. Generated from local session records on 2026-09-17.</div>
+  </footer>
+</body>
+</html>

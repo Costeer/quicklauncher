@@ -92,6 +92,25 @@ class CompositionEngineTest {
     val compose = createComposeRule()
 
     @Test
+    fun `destination without an override uses the launcher theme instead of the current destination`() {
+        val currentDestination = testEnvironment()
+        val launcherTheme = currentDestination.theme.copy(
+            background = ArgbColor.of(0xff123456L),
+        )
+        val launcherResolved = org.quicklauncher.host.runtime.theme.ResolvedLauncherTheme(
+            launcherTheme,
+            BackgroundContrast(7f, 3f, true),
+        )
+        val environment = currentDestination.copy(fallbackResolvedTheme = launcherResolved)
+
+        val neighbor = environment.forDestination(
+            org.quicklauncher.contracts.domain.DestinationId.parse("org.quicklauncher.test/neighbor"),
+        )
+
+        assertEquals(launcherTheme, neighbor.theme)
+    }
+
+    @Test
     fun `prepare opens current and cardinal neighbors and only current is interactive`() = runTest {
         val layouts = RecordingLayouts()
         val registry = TestRegistry(listOf(layouts.registration))
@@ -526,6 +545,36 @@ class CompositionEngineTest {
     }
 
     @Test
+    fun `noninteractive search block does not request a live search presentation`() = runTest {
+        val visual = VisualRegistrations(requiresSearchPresentation = true)
+        val registry = TestRegistry(listOf(visual.layout, visual.block))
+        val store = InMemoryLauncherStore(
+            configurationResolver = registryConfigurationResolver(registry),
+            placementPolicy = RegistryPlacementPolicy(registry),
+        )
+        val current = installVisualTree(store, visual)
+        var presentationRequests = 0
+        val prepared = DefaultCompositionEngine(registry, backgroundScope).prepare(
+            CompositionRequest(
+                store.read(),
+                current,
+                testEnvironment().copy(
+                    searchPresentations = SearchPresentationSource {
+                        presentationRequests += 1
+                        null
+                    },
+                ),
+                currentInteractive = false,
+            ),
+        )
+
+        compose.setContent { prepared.current.Render() }
+        compose.waitForIdle()
+
+        assertEquals(0, presentationRequests)
+    }
+
+    @Test
     fun `prepared content failure disposes only the failed block session`() = runTest {
         val visual = VisualRegistrations()
         val registry = TestRegistry(listOf(visual.layout, visual.block))
@@ -781,6 +830,7 @@ private class VisualRegistrations(
     blockSlotType: SlotTypeId = SlotType,
     nested: Boolean = false,
     private val renderFirstChildOnly: Boolean = false,
+    private val requiresSearchPresentation: Boolean = false,
 ) {
     private val layoutCodec = TestCodec()
     private val blockCodec = object : ConfigurationCodec<TestConfig> {
@@ -858,6 +908,7 @@ private class VisualRegistrations(
                 emptyList()
             },
             emptySet(),
+            requiresSearchPresentation,
         ),
         object : BlockContribution<TestConfig> {
             override fun open(context: ContributionContext<TestConfig>): BlockSession {

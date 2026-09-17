@@ -12,6 +12,8 @@ dependencies {
     api(project(":contracts:domain"))
     implementation(project(":modules:layout:core"))
     implementation(project(":modules:block:core"))
+    implementation(project(":modules:command:core"))
+    implementation(project(":modules:search:core"))
     implementation(project(":modules:templates:core"))
     compileOnly(project(":registry:annotations"))
     ksp(project(":registry:ksp"))

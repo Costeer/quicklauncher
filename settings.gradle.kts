@@ -35,6 +35,8 @@ include(
     ":host:backup",
     ":modules:layout:core",
     ":modules:block:core",
+    ":modules:command:core",
+    ":modules:search:core",
     ":modules:templates:core",
     ":testing:contracts",
     ":testing:fakes",

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item
+        component="ComponentInfo{org.quicklauncher.synthetic/org.quicklauncher.synthetic.MainActivity}"
+        drawable="phase_seven_fixture_icon" />
+</resources>

@@ -85,6 +85,20 @@ Android objects stop in `:host:platform`. Adapters own Home role, launcher apps 
 
 Phase 5 platform constraints are summarized in [its research note](../research/phase-5-android-platform-behavior.md). Prototype evidence lives under [docs/prototypes](../prototypes).
 
+## Search invariants
+
+The host owns retrieval, validation, ranking, lifecycle, history, permission recovery, and execution. A visible presentation opens one bounded `SearchSession`; removing it from composition closes that session and every provider session and coroutine it owns. Query changes debounce, validate against the contribution contract, advance a generation, cancel prior work, and release prior ephemeral target mappings.
+
+Enabled providers fan out concurrently. Each provider has a bounded candidate input, result limit, and first-result timeout. Healthy snapshots publish without waiting for slow providers. A provider crash, malformed snapshot, duplicate identity, flow failure, timeout, denial, or unavailable capability changes only that provider's state. Every accepted result must match the current session and generation, use its provider namespace, declare the registered kind, carry relevance in `0..1000`, resolve to a typed action or generated-registry command, and remain eligible under the current profile policy.
+
+Profile classification precedes labels, icons, shortcuts, contacts, or other protected metadata. Locked, hidden, quiet, unavailable, and policy-ambiguous Private Space candidates cannot enter candidate preparation, result maps, history, fixtures, or diagnostics. Managed-work results receive mandatory host badging. Profile callbacks purge visible results and ephemeral targets immediately; activation revalidates the session, generation, target, profile, permission, route, and capability before any side effect.
+
+Ranking combines provider relevance with deterministic exact, prefix, token, and bounded fuzzy matching, then applies time-decayed launch history only to app and shortcut targets. Duplicate semantic targets merge deterministically and stable namespaced identity breaks ties. Room retains at most 256 app/shortcut history rows and clamps backward clocks; raw queries and contact, file, web, and Private Space data have no durable representation.
+
+Production providers are build-time contributions for apps, shortcuts, commands, contacts, user-authorized files, public Android Settings, a manually enabled versioned GrapheneOS Settings catalog, safe external HTTPS web actions, and recovery information. Framework objects remain in host/platform adapters. Contacts use runtime permission, files use persisted Storage Access Framework grants, Settings activities must resolve exactly at execution, GrapheneOS private routes require a reviewed build catalog plus a currently callable activity, and web destinations use exact-host HTTPS construction with encoded bounded parameters. The search block consumes immutable host-prepared state and emits typed actions only.
+
+The platform behavior behind these rules is recorded in [Phase 6 search platform behavior](../research/phase-6-search-platform-behavior.md).
+
 ## Accessibility, testing, and release
 
 All visual paths support complete semantics, logical focus, large text, contrast, reduced motion, keyboard or D-pad input, predictive Back, and non-drag editing. Contribution suites and host integration tests use the same public interfaces as production.
@@ -102,7 +116,7 @@ Stable and preview use separate application IDs, stores, signing keys, and relea
 
 ## Remaining sequence
 
-Phases 0 through 4 are complete. Details and latest verification are in [current state](../status/current-state.md).
+Phases 0 through 7 are complete. Details and latest verification are in [current state](../status/current-state.md).
 
 ### Phase 5: platform content
 
@@ -110,17 +124,23 @@ Add widget allocation through cleanup and restore, pinned and dynamic shortcuts,
 
 Exit when widgets and shortcuts survive restart, profile transitions leak no protected data, and contributions receive only prepared state.
 
+Status: complete. The API 35 and GrapheneOS matrices pass, and the final physical managed-profile and intended-installer notification-recovery checks are recorded in [Phase 5 device evidence](../status/phase-5-device-evidence.md).
+
 ### Phase 6: search
 
 Add the search engine, typed action executor, provider permissions, apps, shortcuts, commands, contacts, files, public and GrapheneOS settings, and web providers. Bound concurrency, cancellation, history, and ranking.
 
 Exit when presentation can change without changing retrieval, locked results never enter a session, and one slow provider cannot delay others.
 
+Status: complete. Local, visual, contract, dependency, privacy, API 35 AOSP, GrapheneOS, real managed-profile search, and exact restoration checks pass. See [Phase 6 search evidence](../status/phase-6-search-evidence.md).
+
 ### Phase 7: themes
 
 Add Material palettes, theme profiles, manual tokens, bounded overrides, fonts, icon packs, backgrounds, wallpaper confirmation, validation, and visual tests.
 
 Exit when all modules consume one resolved host theme and system wallpaper changes only after explicit target confirmation.
+
+Status: complete. One host resolver now owns built-in and named profiles, Material Color Utilities palettes, bounded overrides, imported fonts, Nova/ADW icon mappings, launcher and destination backgrounds, image-derived palettes, and typed wallpaper execution. The existing Room schema 7 and Proto selection shape required no migration; built-in destination customization atomically materializes a derived profile before selection, and malformed records fail as complete profile fallbacks. The root Material surface, host UI, composition, previews, layouts, and blocks consume the same immutable resolved values. Local, visual, license, workflow, privacy, module-boundary, Robolectric, and pinned API 35 AOSP gates pass; see [Phase 7 theme evidence](../status/phase-7-theme-evidence.md).
 
 ### Phase 8: backup and migration
 
@@ -141,7 +161,6 @@ Exit when every contract has evidence and the downloaded draft APK matches its t
 - Third-party launcher backup adapters.
 - Tablet and foldable release support.
 - Every icon-pack dialect.
-- Executable search adapters.
 - Public binary compatibility for contribution contracts.
 
 ## Primary references

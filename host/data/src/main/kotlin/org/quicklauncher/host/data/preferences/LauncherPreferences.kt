@@ -34,6 +34,7 @@ enum class PrivateSpaceVisibility {
 class LauncherPreferences private constructor(
     val gestureMode: GestureMode,
     enabledSearchProviders: Collection<ContributionId>,
+    val searchProvidersInitialized: Boolean,
     val historyPolicy: HistoryPolicy,
     val themeProfileId: ThemeProfileId?,
     val notificationStyle: NotificationStyle,
@@ -45,6 +46,7 @@ class LauncherPreferences private constructor(
     internal fun copy(
         gestureMode: GestureMode = this.gestureMode,
         enabledSearchProviders: Collection<ContributionId> = this.enabledSearchProviders,
+        searchProvidersInitialized: Boolean = this.searchProvidersInitialized,
         historyPolicy: HistoryPolicy = this.historyPolicy,
         themeProfileId: ThemeProfileId? = this.themeProfileId,
         notificationStyle: NotificationStyle = this.notificationStyle,
@@ -53,6 +55,7 @@ class LauncherPreferences private constructor(
     ): LauncherPreferences = LauncherPreferences(
         gestureMode = gestureMode,
         enabledSearchProviders = enabledSearchProviders,
+        searchProvidersInitialized = searchProvidersInitialized,
         historyPolicy = historyPolicy,
         themeProfileId = themeProfileId,
         notificationStyle = notificationStyle,
@@ -64,6 +67,7 @@ class LauncherPreferences private constructor(
         other is LauncherPreferences &&
             gestureMode == other.gestureMode &&
             enabledSearchProviders == other.enabledSearchProviders &&
+            searchProvidersInitialized == other.searchProvidersInitialized &&
             historyPolicy == other.historyPolicy &&
             themeProfileId == other.themeProfileId &&
             notificationStyle == other.notificationStyle &&
@@ -73,6 +77,7 @@ class LauncherPreferences private constructor(
     override fun hashCode(): Int {
         var result = gestureMode.hashCode()
         result = 31 * result + enabledSearchProviders.hashCode()
+        result = 31 * result + searchProvidersInitialized.hashCode()
         result = 31 * result + historyPolicy.hashCode()
         result = 31 * result + (themeProfileId?.hashCode() ?: 0)
         result = 31 * result + notificationStyle.hashCode()
@@ -85,6 +90,7 @@ class LauncherPreferences private constructor(
         "LauncherPreferences(" +
             "gestureMode=$gestureMode, " +
             "enabledSearchProviders=$enabledSearchProviders, " +
+            "searchProvidersInitialized=$searchProvidersInitialized, " +
             "historyPolicy=$historyPolicy, " +
             "themeProfileId=$themeProfileId, " +
             "notificationStyle=$notificationStyle, " +
@@ -95,6 +101,7 @@ class LauncherPreferences private constructor(
         val Default: LauncherPreferences = LauncherPreferences(
             gestureMode = GestureMode.CONTENT_HANDOFF,
             enabledSearchProviders = emptySet(),
+            searchProvidersInitialized = false,
             historyPolicy = HistoryPolicy.DISABLED,
             themeProfileId = null,
             notificationStyle = NotificationStyle.HIDDEN,
@@ -105,6 +112,7 @@ class LauncherPreferences private constructor(
         fun create(
             gestureMode: GestureMode = GestureMode.CONTENT_HANDOFF,
             enabledSearchProviders: Collection<ContributionId> = emptySet(),
+            searchProvidersInitialized: Boolean = false,
             historyPolicy: HistoryPolicy = HistoryPolicy.DISABLED,
             themeProfileId: ThemeProfileId? = null,
             notificationStyle: NotificationStyle = NotificationStyle.HIDDEN,
@@ -113,6 +121,7 @@ class LauncherPreferences private constructor(
         ): LauncherPreferences = LauncherPreferences(
             gestureMode = gestureMode,
             enabledSearchProviders = enabledSearchProviders,
+            searchProvidersInitialized = searchProvidersInitialized,
             historyPolicy = historyPolicy,
             themeProfileId = themeProfileId,
             notificationStyle = notificationStyle,

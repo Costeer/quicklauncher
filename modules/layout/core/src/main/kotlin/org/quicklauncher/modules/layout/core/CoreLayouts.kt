@@ -97,6 +97,7 @@ object SingleBlockLayoutCodec : ConfigurationCodec<SingleBlockLayoutConfiguratio
     configTypeId = CoreLayoutIds.GRID_CONFIG,
     displayName = "Grid",
     description = "Arranges blocks in a configurable destination grid",
+    providedCapabilities = ["org.quicklauncher.capability/theme-accent"],
     settings = GridLayoutSettings::class,
     codec = GridLayoutCodec::class,
     contractTests = GridLayoutContract::class,

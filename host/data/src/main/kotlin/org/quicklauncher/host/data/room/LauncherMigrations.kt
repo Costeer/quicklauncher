@@ -186,3 +186,19 @@ internal object LauncherMigration5To6 : Migration(5, 6) {
         )
     }
 }
+
+internal object LauncherMigration6To7 : Migration(6, 7) {
+    override suspend fun migrate(connection: SQLiteConnection) {
+        connection.execSQL(
+            "CREATE TABLE IF NOT EXISTS `search_launch_history` (" +
+                "`targetKind` TEXT NOT NULL, `profileSerial` INTEGER NOT NULL, " +
+                "`packageName` TEXT NOT NULL, `targetName` TEXT NOT NULL, " +
+                "`launchCount` INTEGER NOT NULL, `lastLaunchedAtMillis` INTEGER NOT NULL, " +
+                "PRIMARY KEY(`targetKind`, `profileSerial`, `packageName`, `targetName`))",
+        )
+        connection.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_search_launch_history_lastLaunchedAtMillis` " +
+                "ON `search_launch_history` (`lastLaunchedAtMillis`)",
+        )
+    }
+}

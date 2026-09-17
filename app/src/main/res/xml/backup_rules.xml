@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <include domain="database" path="quicklauncher.db" requireFlags="clientSideEncryption" />
+    <include domain="file" path="datastore/launcher-preferences.pb" requireFlags="clientSideEncryption" />
+    <include domain="file" path="theme-assets" requireFlags="clientSideEncryption" />
+    <include domain="sharedpref" path="portable-backup-web-adapters.xml" requireFlags="clientSideEncryption" />
+</full-backup-content>

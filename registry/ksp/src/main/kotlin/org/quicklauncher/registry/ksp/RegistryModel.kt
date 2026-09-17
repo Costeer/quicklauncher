@@ -124,6 +124,7 @@ sealed interface RawSpecificDescriptor {
         val compatibleSlotTypes: List<String>,
         val childSlots: List<RawSlot>,
         val occupiedScrollAxes: List<String> = emptyList(),
+        val requiresSearchPresentation: Boolean = false,
     ) : RawSpecificDescriptor
 
     data class SearchProvider(

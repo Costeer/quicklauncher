@@ -18,9 +18,12 @@ import kotlinx.coroutines.yield
 import org.quicklauncher.contracts.contribution.ContributionContext
 import org.quicklauncher.contracts.contribution.ContributionTypes
 import org.quicklauncher.contracts.contribution.DisplayText
+import org.quicklauncher.contracts.contribution.GenerationAwareSearchProviderSession
 import org.quicklauncher.contracts.contribution.ProviderResult
+import org.quicklauncher.contracts.contribution.ProviderResultSnapshot
 import org.quicklauncher.contracts.contribution.SearchProviderContribution
 import org.quicklauncher.contracts.contribution.SearchProviderDescriptor
+import org.quicklauncher.contracts.contribution.SearchProviderRequest
 import org.quicklauncher.contracts.contribution.SearchProviderSession
 import org.quicklauncher.contracts.contribution.SearchQuery
 import org.quicklauncher.contracts.contribution.SearchResultAction
@@ -71,7 +74,7 @@ object SampleSearchProvider : SearchProviderContribution<SampleConfiguration> {
 
     private class Session(
         private val context: ContributionContext<SampleConfiguration>,
-    ) : SearchProviderSession {
+    ) : GenerationAwareSearchProviderSession {
         private val lock = Any()
         private val sessionJob = SupervisorJob(
             checkNotNull(context.instanceScope.coroutineContext[Job]) {
@@ -83,32 +86,43 @@ object SampleSearchProvider : SearchProviderContribution<SampleConfiguration> {
         private var generation = 0L
         private var queryJob: Job? = null
 
-        override val results: Flow<List<ProviderResult>> = flow {
+        override val snapshots: Flow<ProviderResultSnapshot> = flow {
             val minimumGeneration = synchronized(lock) { generation }
             emitAll(
                 events
                     .takeWhile { event -> event !== ResultEvent.Closed }
                     .filterIsInstance<ResultEvent.Published>()
                     .filter { event -> event.generation >= minimumGeneration }
-                    .map { event -> event.results },
+                    .map { event -> ProviderResultSnapshot(event.generation, event.results) },
             )
         }
+        override val results: Flow<List<ProviderResult>> = snapshots.map { it.results }
 
         @Volatile
         override var isClosed: Boolean = false
             private set
 
         override fun updateQuery(query: SearchQuery) {
+            val request = synchronized(lock) {
+                SearchProviderRequest(generation + 1L, query, emptyList())
+            }
+            update(request)
+        }
+
+        override fun update(request: SearchProviderRequest) {
             synchronized(lock) {
                 check(!isClosed) { "Search session is closed" }
                 context.cancellation.ensureActive()
-                generation += 1
-                val requestedGeneration = generation
+                require(request.generation > generation) { "Search generation must increase" }
+                generation = request.generation
+                val requestedGeneration = request.generation
                 queryJob?.cancel()
                 queryJob = sessionScope.launch {
                     yield()
                     context.cancellation.ensureActive()
-                    val queryResults = if (context.configuration.enabled && query.value == "normal") {
+                    val queryResults = if (
+                        context.configuration.enabled && request.query.value == "normal"
+                    ) {
                         immutableSampleList(listOf(normalSearchResult))
                     } else {
                         immutableSampleList(emptyList())

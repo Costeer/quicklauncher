@@ -79,6 +79,12 @@ data class ModuleCopyIdentity(
 }
 
 sealed interface LauncherEdit {
+    /** Replaces all portable launcher state after archive decoding and compatibility preparation. */
+    data class RestoreSnapshot(
+        val snapshot: LauncherSnapshot,
+        val rebindWidgets: Boolean = true,
+    ) : LauncherEdit
+
     /** Atomically replaces the pristine first-run safe destination with a validated onboarding plan. */
     data class InstallLauncherPlan(val installation: LauncherPlanInstallation) : LauncherEdit
 
@@ -278,4 +284,17 @@ sealed interface LauncherEdit {
         val packageName: org.quicklauncher.contracts.domain.PackageName,
         val activityName: String,
     ) : LauncherEdit
+
+    /** Replaces one complete validated opaque profile record in the Room transaction domain. */
+    data class PutThemeProfile(val profile: ThemeProfileRecord) : LauncherEdit
+
+    data class DeleteThemeProfile(
+        val themeProfileId: org.quicklauncher.contracts.domain.ThemeProfileId,
+        val confirmed: Boolean,
+    ) : LauncherEdit
+
+    /** Replaces the complete destination override so readers never observe partial background state. */
+    data class PutDestinationBackground(val background: DestinationBackgroundRecord) : LauncherEdit
+
+    data class DeleteDestinationBackground(val destinationId: DestinationId) : LauncherEdit
 }

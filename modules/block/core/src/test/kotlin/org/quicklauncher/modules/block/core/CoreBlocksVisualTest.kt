@@ -23,6 +23,8 @@ import org.quicklauncher.contracts.contribution.BlockContribution
 import org.quicklauncher.contracts.contribution.ConfigurationCodec
 import org.quicklauncher.contracts.contribution.ContributionContext
 import org.quicklauncher.contracts.domain.ModuleInstanceId
+import org.quicklauncher.contracts.domain.ContributionId
+import org.quicklauncher.contracts.domain.SearchResultId
 import org.quicklauncher.contracts.ui.ActionDispatchResult
 import org.quicklauncher.contracts.ui.ActionSink
 import org.quicklauncher.contracts.ui.BlockAction
@@ -34,6 +36,11 @@ import org.quicklauncher.contracts.ui.PreparedContentRenderer
 import org.quicklauncher.contracts.ui.PreparedHostContent
 import org.quicklauncher.contracts.ui.PreparedHostSurface
 import org.quicklauncher.contracts.ui.PreviewScenario
+import org.quicklauncher.contracts.ui.PreparedSearchResult
+import org.quicklauncher.contracts.ui.SearchPresentation
+import org.quicklauncher.contracts.ui.SearchPresentationProviderState
+import org.quicklauncher.contracts.ui.SearchPresentationState
+import org.quicklauncher.contracts.ui.SearchPresentationToken
 import org.quicklauncher.contracts.ui.SlotRenderState
 import org.quicklauncher.contracts.ui.SlotRenderer
 import org.quicklauncher.contracts.ui.ThemeMode
@@ -98,6 +105,7 @@ class CoreBlocksVisualTest {
                                 EmptyVisualSlotRenderer,
                                 VisualContentRenderer,
                                 ActionSink<BlockAction> { ActionDispatchResult.Accepted },
+                                if (name == "search") searchPresentation(scenario) else null,
                             ),
                         )
                     }
@@ -153,6 +161,46 @@ class CoreBlocksVisualTest {
         ),
         source.childSlots,
     )
+
+    private fun searchPresentation(scenario: PreviewScenario): SearchPresentation {
+        val provider = ContributionId.parse("org.quicklauncher.search/apps")
+        val state = when (scenario) {
+            PreviewScenario.EMPTY -> SearchPresentationProviderState.READY
+            PreviewScenario.NORMAL,
+            PreviewScenario.LARGE_TEXT,
+            -> SearchPresentationProviderState.READY
+            PreviewScenario.LOADING -> SearchPresentationProviderState.LOADING
+            PreviewScenario.PERMISSION_DENIED -> SearchPresentationProviderState.DENIED
+            PreviewScenario.PROFILE_LOCKED -> SearchPresentationProviderState.UNAVAILABLE
+            PreviewScenario.ERROR -> SearchPresentationProviderState.FAILED
+        }
+        val results = if (scenario == PreviewScenario.NORMAL || scenario == PreviewScenario.LARGE_TEXT) {
+            listOf(
+                PreparedSearchResult(
+                    SearchPresentationToken(
+                        1L,
+                        1L,
+                        provider,
+                        SearchResultId.parse("org.quicklauncher.search.apps/synthetic-work"),
+                    ),
+                    "Applications",
+                    "Synthetic result",
+                    null,
+                    workBadged = true,
+                ),
+            )
+        } else {
+            emptyList()
+        }
+        return SearchPresentation(
+            SearchPresentationState(
+                query = if (results.isEmpty()) "" else "syn",
+                results = results,
+                providerStates = mapOf(provider to state),
+            ),
+            ActionSink { ActionDispatchResult.Accepted },
+        )
+    }
 }
 
 private object EmptyVisualSlotRenderer : SlotRenderer {

@@ -77,6 +77,8 @@ interface BlockSession : ContributionSession {
 
 @JvmInline
 value class SearchQuery private constructor(val value: String) {
+    override fun toString(): String = "SearchQuery(redacted)"
+
     companion object {
         fun of(value: String): SearchQuery {
             require(value.length <= 512) { "Search query must not exceed 512 characters" }
@@ -104,6 +106,24 @@ data class ProviderResult(
             "Provider relevance must be between 0 and 1000"
         }
     }
+
+    override fun toString(): String = "ProviderResult(kind=$kind, content=redacted)"
+}
+
+/** Canonical typed mapping from a provider identity to its result-identity namespace. */
+object SearchProviderResultIds {
+    fun create(providerId: ContributionId, localName: String): SearchResultId {
+        require(localName.isNotBlank()) { "Search provider result local name must not be blank" }
+        val namespace = namespace(providerId)
+        return SearchResultId.parse("$namespace/$localName")
+    }
+
+    fun belongsTo(resultId: SearchResultId, providerId: ContributionId): Boolean =
+        resultId.value.startsWith("${namespace(providerId)}/")
+
+    private fun namespace(providerId: ContributionId): String =
+        providerId.value.substringBefore('/') + "." +
+            providerId.value.substringAfter('/').replace('-', '.')
 }
 
 interface SearchProviderContribution<C : Any> : Contribution {
@@ -114,6 +134,45 @@ interface SearchProviderSession : ContributionSession {
     val results: Flow<List<ProviderResult>>
 
     fun updateQuery(query: SearchQuery)
+}
+
+/**
+ * Host-prepared, generation-tagged input for providers that participate in production search.
+ * Candidates have already crossed host permission and profile policy; providers only retrieve
+ * and score from this immutable snapshot.
+ */
+class SearchProviderRequest(
+    val generation: Long,
+    val query: SearchQuery,
+    candidates: Collection<ProviderResult>,
+) {
+    val candidates: List<ProviderResult> = immutableContractList(candidates)
+
+    init {
+        require(generation > 0L) { "Search provider generation must be positive" }
+    }
+}
+
+/** Result snapshots carry the host generation so stale provider work can be rejected. */
+class ProviderResultSnapshot(
+    val generation: Long,
+    results: Collection<ProviderResult>,
+) {
+    val results: List<ProviderResult> = immutableContractList(results)
+
+    init {
+        require(generation > 0L) { "Provider result generation must be positive" }
+    }
+}
+
+/**
+ * Production extension of the major-1 provider contract. The legacy members remain for source
+ * compatibility, while the host accepts only generation-aware sessions for production fan-out.
+ */
+interface GenerationAwareSearchProviderSession : SearchProviderSession {
+    val snapshots: Flow<ProviderResultSnapshot>
+
+    fun update(request: SearchProviderRequest)
 }
 
 sealed interface SettingValue {

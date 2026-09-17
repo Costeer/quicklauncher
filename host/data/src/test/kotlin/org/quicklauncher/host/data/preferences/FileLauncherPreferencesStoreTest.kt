@@ -65,6 +65,7 @@ class FileLauncherPreferencesStoreTest {
 
             assertEquals(GestureMode.EDGE_ACTIVATION, updated.gestureMode)
             assertEquals(providerIds, updated.enabledSearchProviders)
+            assertTrue(updated.searchProvidersInitialized)
             assertEquals(HistoryPolicy.LOCAL, updated.historyPolicy)
             assertEquals(themeProfileId, updated.themeProfileId)
             assertEquals(NotificationStyle.APPROXIMATE_COUNT, updated.notificationStyle)
@@ -91,6 +92,7 @@ class FileLauncherPreferencesStoreTest {
             callerOwnedSet.clear()
 
             assertEquals(setOf(providerId), updated.enabledSearchProviders)
+            assertTrue(updated.searchProvidersInitialized)
             try {
                 (updated.enabledSearchProviders as MutableSet).clear()
                 fail("Enabled providers must not be mutable")
@@ -100,6 +102,24 @@ class FileLauncherPreferencesStoreTest {
             assertEquals(setOf(providerId), store.read().enabledSearchProviders)
         } finally {
             store.close()
+        }
+    }
+
+    @Test
+    fun intentionallyEmptyProviderSetRemainsInitializedAfterReopen() = runTest {
+        val file = File(temporaryFolder.root, "launcher_preferences.pb")
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val original = FileLauncherPreferencesStore.open(file, dispatcher)
+        val updated = original.setEnabledSearchProviders(emptySet())
+        assertTrue(updated.searchProvidersInitialized)
+        original.close()
+
+        val reopened = FileLauncherPreferencesStore.open(file, dispatcher)
+        try {
+            assertTrue(reopened.read().searchProvidersInitialized)
+            assertTrue(reopened.read().enabledSearchProviders.isEmpty())
+        } finally {
+            reopened.close()
         }
     }
 

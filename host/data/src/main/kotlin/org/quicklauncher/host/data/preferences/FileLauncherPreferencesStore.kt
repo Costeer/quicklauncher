@@ -50,7 +50,12 @@ class FileLauncherPreferencesStore private constructor(
         providerIds: Set<ContributionId>,
     ): LauncherPreferences {
         val providerSnapshot = providerIds.toSet()
-        return update { it.copy(enabledSearchProviders = providerSnapshot) }
+        return update {
+            it.copy(
+                enabledSearchProviders = providerSnapshot,
+                searchProvidersInitialized = true,
+            )
+        }
     }
 
     override suspend fun setHistoryPolicy(policy: HistoryPolicy): LauncherPreferences =

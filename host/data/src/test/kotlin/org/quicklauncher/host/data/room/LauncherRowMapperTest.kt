@@ -296,6 +296,41 @@ class LauncherRowMapperTest {
         )
     }
 
+    @Test
+    fun `malformed theme rows are isolated without dropping unrelated durable rows`() {
+        val content = ContentItemEntity(
+            id = "org.quicklauncher.content/synthetic",
+            kind = ContentItemKind.FAVORITE.name,
+            profileSerial = 10,
+            packageName = "org.example.app",
+            shortcutId = null,
+            encodedSemanticData = "opaque synthetic data",
+        )
+        val validThemeId = "org.quicklauncher.theme/valid"
+        val rows = rowsWithContentEntity(content).copy(
+            themeProfiles = listOf(
+                ThemeProfileEntity(validThemeId, "Valid", 1, "{}"),
+                ThemeProfileEntity("invalid id", "", 0, "malformed"),
+            ),
+            destinationBackgrounds = listOf(
+                DestinationBackgroundEntity(destinationId.value, validThemeId, 1, "{}"),
+                DestinationBackgroundEntity("invalid id", validThemeId, 0, "malformed"),
+                DestinationBackgroundEntity(
+                    "org.quicklauncher.destination/missing",
+                    "org.quicklauncher.theme/missing",
+                    1,
+                    "{}",
+                ),
+            ),
+        )
+
+        val restored = rows.toLauncherSnapshot()
+
+        assertEquals(listOf("Valid"), restored.themeProfiles.map { it.name })
+        assertEquals(1, restored.destinationBackgrounds.size)
+        assertEquals("opaque synthetic data", restored.contentItems.single().encoded)
+    }
+
     private fun storedConfiguration(
         local: String,
         encoded: String,

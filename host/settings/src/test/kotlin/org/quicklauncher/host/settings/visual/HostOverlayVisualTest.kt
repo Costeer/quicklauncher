@@ -3,6 +3,22 @@ package org.quicklauncher.host.settings.visual
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.Surface
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.background
+import androidx.compose.material3.Text
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
 import com.android.resources.NightMode
@@ -13,6 +29,8 @@ import org.quicklauncher.contracts.domain.DestinationId
 import org.quicklauncher.contracts.domain.ContentItemId
 import org.quicklauncher.contracts.domain.ModuleInstanceId
 import org.quicklauncher.contracts.domain.ProfileSerial
+import org.quicklauncher.contracts.domain.ThemeProfileId
+import org.quicklauncher.contracts.domain.ArgbColor
 import org.quicklauncher.host.runtime.LauncherDestination
 import org.quicklauncher.host.runtime.RecoveryInstance
 import org.quicklauncher.host.runtime.actions.ItemAction
@@ -33,6 +51,14 @@ import org.quicklauncher.host.settings.AppRecoverySurface
 import org.quicklauncher.host.settings.MapOverviewSurface
 import org.quicklauncher.host.settings.PrivateSpaceOverlay
 import org.quicklauncher.host.settings.RecoverySurface
+import org.quicklauncher.host.settings.ThemeProfileSetting
+import org.quicklauncher.host.settings.ThemeProfileSettingsContent
+import org.quicklauncher.host.settings.WallpaperConfirmationContent
+import org.quicklauncher.host.settings.ManualPaletteSetting
+import org.quicklauncher.host.settings.ManualPaletteSettingsContent
+import org.quicklauncher.host.settings.BackupSettingsContent
+import org.quicklauncher.host.settings.BackupSnapshotSetting
+import org.quicklauncher.host.settings.BackupRestoreReviewSetting
 
 class HostOverlayVisualTest {
     @get:Rule
@@ -53,6 +79,129 @@ class HostOverlayVisualTest {
                     onOpenAppRecovery = {},
                     onClose = {},
                 )
+            }
+        }
+    }
+
+    @Test
+    fun `theme profile and wallpaper confirmation remain accessible across visual modes`() {
+        variants.forEach { variant ->
+            snapshot(variant, "theme-profiles") {
+                Surface(Modifier.fillMaxSize()) {
+                    Column(
+                        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        ThemeProfileSettingsContent(
+                            themeProfiles = listOf(
+                                ThemeProfileSetting(
+                                    ThemeProfileId.parse("org.quicklauncher.theme/system"),
+                                    "System",
+                                    selected = true,
+                                    previewed = false,
+                                ),
+                                ThemeProfileSetting(
+                                    ThemeProfileId.parse("org.quicklauncher.theme/synthetic"),
+                                    "Synthetic expressive profile",
+                                    selected = false,
+                                    previewed = true,
+                                    deletable = true,
+                                ),
+                            ),
+                        )
+                    }
+                }
+            }
+            snapshot(variant, "wallpaper-confirmation") {
+                Surface(Modifier.fillMaxSize()) {
+                    Column(
+                        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        WallpaperConfirmationContent(
+                            visible = true,
+                            previewContent = {
+                                Box(
+                                    Modifier.fillMaxWidth().height(120.dp)
+                                        .background(Color(0xff28547a)),
+                                ) {
+                                    Text(
+                                        "Synthetic crop preview",
+                                        color = Color.White,
+                                        modifier = Modifier.padding(16.dp),
+                                    )
+                                }
+                            },
+                        )
+                    }
+                }
+            }
+            snapshot(variant, "manual-palette") {
+                Surface(Modifier.fillMaxSize()) {
+                    Column(
+                        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        ManualPaletteSettingsContent(
+                            ManualPaletteSetting(
+                                ThemeProfileId.parse("org.quicklauncher.theme/synthetic-manual"),
+                                ArgbColor.of(0xff2949a3L),
+                                ArgbColor.of(0xffffffffL),
+                                ArgbColor.of(0xfff5f5f5L),
+                                ArgbColor.of(0xff161616L),
+                            ),
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `backup review remains usable across visual modes`() {
+        variants.forEach { variant ->
+            val captures = buildList {
+                add("backup-review" to false)
+                if (variant.id == "large-text-light-portrait") {
+                    add("backup-review-actions" to true)
+                }
+            }
+            captures.forEach { (surface, showReviewActions) ->
+                snapshot(variant, surface) {
+                    val initialScroll = with(LocalDensity.current) {
+                        if (showReviewActions) 940.dp.roundToPx() else 0
+                    }
+                    val scrollState = rememberScrollState(initial = initialScroll)
+                    Surface(Modifier.fillMaxSize()) {
+                        Column(
+                            Modifier.fillMaxSize()
+                                .verticalScroll(scrollState)
+                                .padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            BackupSettingsContent(
+                                folderSelected = true,
+                                automaticEnabled = true,
+                                manualBackups = listOf(
+                                    BackupSnapshotSetting(
+                                        "manual-1",
+                                        "Manual backup · today",
+                                        "Encrypted · 428 KB",
+                                    ),
+                                ),
+                                automaticBackups = listOf(
+                                    BackupSnapshotSetting(
+                                        "auto-1",
+                                        "Automatic backup · yesterday",
+                                        "Charging snapshot · 417 KB",
+                                    ),
+                                ),
+                                message = "Review the restore before applying it.",
+                                restoreReview = BackupRestoreReviewSetting(3, 14, 2, 1, 2),
+                            )
+                        }
+                    }
+                }
             }
         }
     }

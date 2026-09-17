@@ -4,6 +4,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -13,16 +14,24 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
@@ -53,6 +62,8 @@ import org.quicklauncher.contracts.ui.PerformanceMetric
 import org.quicklauncher.contracts.ui.PreparedContentItem
 import org.quicklauncher.contracts.ui.PreviewScenario
 import org.quicklauncher.contracts.ui.RenderStatus
+import org.quicklauncher.contracts.ui.SearchPresentationAction
+import org.quicklauncher.contracts.ui.SearchPresentationProviderState
 import org.quicklauncher.registry.annotations.ConfigurationCodecSpec
 import org.quicklauncher.registry.annotations.ContractTestSpec
 import org.quicklauncher.registry.annotations.ContributionCategorySpec
@@ -255,6 +266,7 @@ object AlphabeticalAppsBlock : BlockContribution<AlphabeticalAppsConfiguration> 
     configTypeId = CoreBlockIds.APP_GRID_CONFIG,
     displayName = "App grid",
     description = "Shows prepared apps in a configurable grid",
+    providedCapabilities = ["org.quicklauncher.capability/theme-accent"],
     settings = AppGridSettings::class,
     codec = AppGridCodec::class,
     contractTests = AppGridContract::class,
@@ -339,12 +351,14 @@ object ClockDateBlock : BlockContribution<ClockDateConfiguration> {
     contractMajor = 1,
     configTypeId = CoreBlockIds.SEARCH_CONFIG,
     displayName = "Search",
-    description = "Filters host-prepared applications without exposing platform objects",
+    description = "Renders host-prepared search state and emits typed presentation actions",
+    providedCapabilities = ["org.quicklauncher.capability/theme-accent"],
     settings = SearchSettings::class,
     codec = SearchCodec::class,
     contractTests = SearchContract::class,
     compatibleSlotTypes = [CoreBlockIds.GRID_SLOT, CoreBlockIds.FULL_SLOT],
     occupiedScrollAxes = [ScrollAxisSpec.VERTICAL],
+    requiresSearchPresentation = true,
 )
 object SearchBlock : BlockContribution<SearchConfiguration> {
     override fun open(context: ContributionContext<SearchConfiguration>): BlockSession =
@@ -509,26 +523,159 @@ private fun ClockDate(input: BlockRenderInput, configuration: ClockDateConfigura
 @Composable
 private fun SearchApps(input: BlockRenderInput, configuration: SearchConfiguration) {
     StatusOrContent(input, "search") {
-        var query by remember { mutableStateOf("") }
-        val matches = input.state.content.items.filter { item ->
-            item.kind == org.quicklauncher.contracts.ui.PreparedContentKind.APP &&
-                query.length >= configuration.minimumCharacters &&
-                item.label.contains(query.trim(), ignoreCase = true)
+        val presentation = input.search
+        if (presentation == null) {
+            StatusText("Search unavailable")
+            return@StatusOrContent
+        }
+        val state = presentation.state
+        val focusManager = LocalFocusManager.current
+        val visibleResults = state.results
+        val searchFocus = remember { FocusRequester() }
+        val resultFocus = remember(visibleResults.map { it.token }) {
+            visibleResults.map { FocusRequester() }
+        }
+        LaunchedEffect(state.focusRequestId) {
+            if (state.focusRequestId > 0L) searchFocus.requestFocus()
         }
         Column(Modifier.fillMaxSize()) {
             OutlinedTextField(
-                value = query,
-                onValueChange = { query = it.take(512) },
+                value = state.query,
+                onValueChange = { value ->
+                    presentation.actions.emit(
+                        SearchPresentationAction.QueryChanged(value, configuration.minimumCharacters),
+                    )
+                },
                 enabled = input.state.composition.isInteractive,
-                label = { Text("Search apps") },
-                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Search") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth().semantics {
+                    contentDescription = "Search input"
+                }.focusRequester(searchFocus).onPreviewKeyEvent { event ->
+                    if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    when (event.key) {
+                        Key.Enter, Key.NumPadEnter -> visibleResults.firstOrNull()?.let { first ->
+                            presentation.actions.emit(SearchPresentationAction.Activate(first.token))
+                            true
+                        } ?: false
+                        Key.Escape -> {
+                            presentation.actions.emit(SearchPresentationAction.Dismiss)
+                            true
+                        }
+                        Key.DirectionDown -> resultFocus.firstOrNull()?.let {
+                            it.requestFocus()
+                            true
+                        } ?: focusManager.moveFocus(FocusDirection.Down)
+                        Key.DirectionUp -> focusManager.moveFocus(FocusDirection.Up)
+                        else -> false
+                    }
+                },
             )
-            if (matches.isEmpty()) {
-                StatusText(if (query.isBlank()) "No applications available" else "No matching applications")
+            state.providerStates.entries
+                .filter { (_, providerState) ->
+                    providerState != SearchPresentationProviderState.IDLE &&
+                        providerState != SearchPresentationProviderState.READY
+                }
+                .sortedBy { (providerId, _) -> providerId.value }
+                .forEach { (providerId, providerState) ->
+                    val providerName = state.providerLabels[providerId] ?: "Search provider"
+                    val status = when (providerState) {
+                        SearchPresentationProviderState.LOADING -> "loading"
+                        SearchPresentationProviderState.DENIED -> "access denied"
+                        SearchPresentationProviderState.UNAVAILABLE -> "unavailable"
+                        SearchPresentationProviderState.TIMED_OUT -> "timed out"
+                        SearchPresentationProviderState.FAILED -> "failed"
+                        SearchPresentationProviderState.IDLE,
+                        SearchPresentationProviderState.READY,
+                        -> null
+                    }
+                    if (status != null) {
+                        Text("$providerName: $status", style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+            if (visibleResults.isEmpty()) {
+                val providerStates = state.providerStates.values
+                val message = when {
+                    providerStates.any { it == SearchPresentationProviderState.LOADING } -> "Searching"
+                    providerStates.any { it == SearchPresentationProviderState.DENIED } -> "Search access required"
+                    providerStates.isNotEmpty() && providerStates.all {
+                        it == SearchPresentationProviderState.UNAVAILABLE ||
+                            it == SearchPresentationProviderState.TIMED_OUT ||
+                            it == SearchPresentationProviderState.FAILED
+                    } -> "Search providers unavailable"
+                    state.query.isBlank() -> "Type to search"
+                    else -> "No results"
+                }
+                StatusText(message)
             } else {
                 LazyColumn(Modifier.weight(1f)) {
-                    items(matches, key = { it.id.value }) { item ->
-                        PreparedItem(input, item, Modifier.fillMaxWidth())
+                    itemsIndexed(
+                        visibleResults,
+                        key = { _, result ->
+                            "${result.token.providerId.value}:${result.token.resultId.value}"
+                        },
+                    ) { index, result ->
+                        if (index == 0 || visibleResults[index - 1].providerLabel != result.providerLabel) {
+                            Text(
+                                result.providerLabel,
+                                style = MaterialTheme.typography.labelLarge,
+                                modifier = Modifier.semantics { heading() },
+                            )
+                        }
+                        Card(
+                            Modifier.fillMaxWidth().focusRequester(resultFocus[index]).onPreviewKeyEvent { event ->
+                                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                                when (event.key) {
+                                    Key.Enter, Key.NumPadEnter -> {
+                                        presentation.actions.emit(
+                                            SearchPresentationAction.Activate(result.token),
+                                        )
+                                        true
+                                    }
+                                    Key.Escape -> {
+                                        presentation.actions.emit(SearchPresentationAction.Dismiss)
+                                        true
+                                    }
+                                    Key.DirectionDown -> resultFocus.getOrNull(index + 1)?.let {
+                                        it.requestFocus()
+                                        true
+                                    } ?: false
+                                    Key.DirectionUp -> {
+                                        (resultFocus.getOrNull(index - 1) ?: searchFocus).requestFocus()
+                                        true
+                                    }
+                                    else -> false
+                                }
+                            }.combinedClickable(
+                                enabled = input.state.composition.isInteractive,
+                                onClick = {
+                                    presentation.actions.emit(SearchPresentationAction.Activate(result.token))
+                                },
+                            ).semantics {
+                                contentDescription = if (result.workBadged) {
+                                    "${result.title}, Work"
+                                } else {
+                                    result.title
+                                }
+                            },
+                        ) {
+                            Column(Modifier.padding(12.dp)) {
+                                Text(result.title)
+                                if (result.workBadged) {
+                                    Text(
+                                        "Work",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        maxLines = 1,
+                                        modifier = Modifier.semantics {
+                                            contentDescription = "Work profile"
+                                        },
+                                    )
+                                }
+                                result.subtitle
+                                    ?.takeUnless { result.workBadged && it.equals("Work", ignoreCase = true) }
+                                    ?.let { Text(it) }
+                            }
+                        }
                     }
                 }
             }

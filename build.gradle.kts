@@ -232,8 +232,11 @@ tasks.register("checkModuleBoundaries") {
             "android.app.Notification",
             "android.service.notification.StatusBarNotification",
             "android.content.ComponentName",
+            "android.database.Cursor",
             "android.graphics.drawable.Drawable",
             "android.content.Intent",
+            "android.net.Uri",
+            "android.os.CancellationSignal",
         )
         val frameworkOwners = subprojects.filter { owner ->
             owner.path.startsWith(":contracts:") ||

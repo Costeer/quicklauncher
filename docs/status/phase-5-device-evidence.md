@@ -1,6 +1,6 @@
 # Phase 5 device evidence
 
-Checked on 2026-09-14. The API 35 AOSP requirement and the available GrapheneOS reference-device paths pass. This remains an open evidence record because the attached reference device has no managed-work profile, so the required real work-profile path cannot be exercised.
+Checked on 2026-09-14. The API 35 AOSP requirement and the GrapheneOS reference-device paths pass. A disposable managed profile provisioned by Android's ManagedProvisioning flow supplied the previously missing physical work-profile evidence, and the notification recovery check passed from the intended Obtainium installer path. Phase 5 is complete.
 
 ## Device availability
 
@@ -13,7 +13,7 @@ Android/API: 17/37
 Build display/ID/incremental: 2026091001 / CP2A.260805.005 / 2026091001
 Security patch: 2026-09-01
 Release channel: official GrapheneOS Android 17 security preview corresponding to stable 2026091000
-Profiles: personal, locked/quiet Private Space, two full secondary users; no managed-work profile
+Baseline profiles: personal, locked/quiet Private Space, two full secondary users; no pre-existing managed-work profile
 Original Home: com.android.launcher3
 ```
 
@@ -95,7 +95,7 @@ After the final run, Home was `com.android.launcher3`, no `org.quicklauncher` pa
 
 ## Required GrapheneOS run
 
-The complete connected command shown in the API 35 section passed on the reference Pixel in 3 minutes 25 seconds: 384 actionable tasks (17 executed, 367 up-to-date), 39 discovered tests, 38 passed, 1 skipped, and 0 failed. Module totals were `:host:data` 15, `:host:platform` 8, `:host:runtime` 0, `:host:editor` 0, and `:app` 16. The single skip was shortcut pin success because the temporary Home holder lacked shortcut-host authority. The Compose/Espresso-only runtime, editor, and app-recovery surface suites are SDK-suppressed above API 36 because released Espresso 3.7 reflects on an input API removed in API 37; the same tests ran on the required API 35 image. Platform, Room, UiAutomator production-app, widget, notification, profile, Home, process-recreation, folder, and item-overlay tests ran on GrapheneOS. After correcting the cross-API private-profile prerequisite detector, the final production-app rerun passed all 16 discovered GrapheneOS tests in 2 minutes 1 second (255 tasks: 1 executed, 254 up-to-date).
+The complete connected command shown in the API 35 section was rerun after the managed-profile callback repair. It passed in 3 minutes 8 seconds with 384 actionable tasks (5 executed, 379 up-to-date), 39 tests, 37 passes, 2 explicit skips, and no failures. Module totals were `:host:data` 15, `:host:platform` 7, `:host:runtime` 0, `:host:editor` 0, and `:app` 17. Shortcut pin success skipped because the temporary Home holder lacked shortcut-host authority. The destructive managed-profile test skips in the general matrix unless its explicit orchestration argument is present; its physical result is recorded below. The Compose/Espresso-only runtime, editor, and app-recovery surface suites are SDK-suppressed above API 36 because released Espresso 3.7 reflects on an input API removed in API 37; the same tests ran on the required API 35 image. Platform, Room, UiAutomator production-app, widget, notification, profile, Home, process-recreation, folder, and item-overlay tests ran on GrapheneOS.
 
 The matrix exposed an API 37 notification revocation race: the framework could reject `getActiveNotifications()` after access changed. The adapter now rechecks component access before each query, catches the framework `SecurityException`, clears the stale listener, and emits an empty typed snapshot. Both the focused regression and final matrix passed. It also verified the component-specific notification-listener Settings route with global fallback, widget bind cancellation and success against the deterministic provider, host-view recreation, locked Private Space classification, ordinary-surface suppression, `FLAG_SECURE`, repeated-Home cleanup, and exact role/listener restoration.
 
@@ -110,8 +110,19 @@ The production authentication path was run separately with explicit human authen
 
 It passed one test in 1 minute 23 seconds. Quicklauncher acquired Home, classified the real private profile before metadata reads, showed the secure locked overlay, initiated system authentication, observed the asynchronous availability callback, launched one sanitized private item when available, returned Home, locked Private Space, removed its prepared content and indicators, and restored the original state. No private label, icon, shortcut identity, or notification value was logged or recorded.
 
-The production notification onboarding was also exercised by visible UI input on the ADB-installed build. The explicit Settings action opened the component-specific system access page. GrapheneOS rejected the listener operation under restricted settings; Quicklauncher reported revocation instead of retaining counts, exposed its recovery action, and opened the correct App Info page. That App Info overflow offered no “Allow restricted settings” control for this shell-installed build, so completion of the installer-dependent recovery grant is not claimed. The listener grant was removed afterward.
+The managed-work check used a debug-only DPC fixture and Android's visible `ACTION_PROVISION_MANAGED_PROFILE` flow. The created user was reported by Android as `android.os.usertype.profile.MANAGED`, with Quicklauncher as Profile Owner and state `RUNNING_UNLOCKED`; no Private Space, secondary user, shell-created fake, or JVM substitute was used. The fixture publishes only a synthetic activity and dynamic shortcut, and its launcher component is disabled in the personal user. The focused command was:
 
-Final restoration was audited after every focused and matrix run: user 10 was stopped with `QUIET_MODE` and state `-1`, Home was `com.android.launcher3`, the enabled-listener value was exactly `com.android.launcher3/com.android.launcher3.notification.NotificationListener`, and no `org.quicklauncher` package remained. The production device remained usable.
+```bash
+adb shell am instrument --user 0 -w \
+  -e class org.quicklauncher.app.PhaseFiveOverlayInstrumentedTest#managedWorkProfileDiscoveryBadgingLaunchPauseResumeAndCallbackRestoration \
+  -e phase5ManagedWork true \
+  org.quicklauncher.test/androidx.test.runner.AndroidJUnitRunner
+```
 
-The attached device has no `android.os.usertype.profile.MANAGED` profile. Its two additional users are full secondary users and are not substituted for managed-work evidence. Consequently managed-work discovery, mandatory badging, cross-profile launch, pause, resume, and callback invalidation remain blocked by a missing external prerequisite. Phase 5 stays open until that path passes on a compliant GrapheneOS reference device. The installer-dependent restricted-settings grant should also be rerun from the intended distribution channel because the shell install did not expose the recovery control.
+It passed one test in 7.73 seconds. The test verified LauncherApps discovery, the host's mandatory work badge and accessible `Work` suffix, typed app and dynamic-shortcut launch into the managed user, pause to quiet state, immediate app and shortcut removal, personal-profile continuity, resume to available state, callback-driven metadata and placement restoration, and placement cleanup. The device run found that GrapheneOS emits both generic accessible/inaccessible and managed-profile lifecycle broadcasts; all profile-sensitive platform adapters now invalidate on that complete public broadcast set. The disposable managed user was removed with `pm remove-user --wait` after the run.
+
+Notification recovery was repeated through Obtainium 1.6.17, the intended distribution installer named by the architecture. The official APK had SHA-256 `ce1aa65430af809289f4045994838b1b072a2021bd82fceab1a6f4a90d0108d4` and signer certificate SHA-256 `b353601f6a1d5fd6603ae2f50be80cf301367b86b6ab8b1f66243da96cd57362`. Obtainium installed the disposable debug APK through its Direct APK Link support from an ADB-reversed loopback server; Android recorded `installerPackageName=dev.imranr.obtainium`. No release was published and no installer identity was forged.
+
+Visible UI input completed Quicklauncher onboarding and initiated notification access from Launcher Settings. System denial produced the typed denied state and empty indicators. The production recovery action opened Quicklauncher's App Info. A later explicit retry granted access, the production UI reported an active connection, and the original Launcher3 listener remained enabled. Force stop from App Info terminated the listener process and Android rebound it while preserving the grant. Visible system revocation then produced the typed revoked state and removed current indicators immediately. The connected platform test independently covered listener loss and revocation without stale counts. No notification content was inspected or retained.
+
+Final restoration was audited after the focused managed-profile test, Obtainium notification check, and final connected matrix. The disposable managed profile was absent; the original user set remained; Private Space user 10 was stopped with `QUIET_MODE` and state `-1`; Home was `com.android.launcher3`; the enabled-listener value was exactly `com.android.launcher3/com.android.launcher3.notification.NotificationListener`; and Quicklauncher, its test package, Obtainium, TestDPC, the loopback reverse, and the temporary installer APK were absent. No personal user name, app label, shortcut, contact, file, Private Space value, or notification content is recorded. The production device remained usable.

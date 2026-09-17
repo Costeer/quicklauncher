@@ -14,6 +14,7 @@ message StoredLauncherPreferences {
   StoredNotificationStyle notification_style = 6;
   StoredOnboardingState onboarding_state = 7;
   StoredPrivateSpaceVisibility private_space_visibility = 8;
+  bool search_providers_initialized = 9;
 }
 
 enum StoredPrivateSpaceVisibility {

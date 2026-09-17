@@ -51,6 +51,7 @@ import org.quicklauncher.host.data.store.StoreRevision
 import org.quicklauncher.host.data.store.StoreRejectionCode
 import org.quicklauncher.host.data.store.StoredConfigurationDocument
 import org.quicklauncher.host.data.store.ShortcutTarget
+import org.quicklauncher.host.data.store.SearchLaunchTargetRecord
 import org.quicklauncher.host.data.store.WidgetBindState
 import org.quicklauncher.host.data.store.WidgetCleanupState
 import org.quicklauncher.host.data.store.WidgetPlacementRecord
@@ -85,12 +86,13 @@ class RoomLauncherStoreInstrumentedTest {
         migrationHelper.createDatabase(1).closing(::insertVersionOneState)
 
         migrationHelper.runMigrationsAndValidate(
-            6,
+            7,
             listOf(
                 LauncherMigration2To3,
                 LauncherMigration3To4,
                 LauncherMigration4To5,
                 LauncherMigration5To6,
+                LauncherMigration6To7,
             ),
         ).closing { connection ->
             assertLongQuery(connection, "SELECT COUNT(*) FROM destinations", 1)
@@ -331,8 +333,8 @@ class RoomLauncherStoreInstrumentedTest {
         }
 
         migrationHelper.runMigrationsAndValidate(
-            6,
-            listOf(LauncherMigration5To6),
+            7,
+            listOf(LauncherMigration5To6, LauncherMigration6To7),
         ).closing { connection ->
             assertTextQuery(
                 connection,
@@ -343,6 +345,76 @@ class RoomLauncherStoreInstrumentedTest {
                 connection,
                 "SELECT encodedOptions FROM widget_placements WHERE appWidgetId = 42",
                 WIDGET_OPTIONS,
+            )
+        }
+    }
+
+    @Test
+    fun versionSixMigrationAddsBoundedTypedHistoryAndPreservesMalformedRowsOnRead() = runTest {
+        migrationHelper.createDatabase(6).close()
+        migrationHelper.runMigrationsAndValidate(
+            7,
+            listOf(LauncherMigration6To7),
+        ).closing { connection ->
+            connection.execSQL(
+                "INSERT INTO search_launch_history " +
+                    "(targetKind, profileSerial, packageName, targetName, launchCount, " +
+                    "lastLaunchedAtMillis) VALUES " +
+                    "('UNKNOWN', 0, 'org.example.invalid', 'opaque', 1, 10)",
+            )
+        }
+
+        val store = RoomLauncherStore.open(databaseFile)
+        assertTrue(store.readSearchLaunchHistory().isEmpty())
+        repeat(300) { index ->
+            store.recordSearchLaunch(
+                SearchLaunchTargetRecord.App(
+                    org.quicklauncher.contracts.domain.AppActivityIdentity(
+                        ProfileSerial.of(0),
+                        PackageName.parse("org.example.app$index"),
+                        org.quicklauncher.contracts.domain.ActivityName.parse(
+                            "org.example.app$index.MainActivity",
+                        ),
+                    ),
+                    org.quicklauncher.host.data.store.SearchLaunchProfileKind.PERSONAL,
+                ),
+                index.toLong(),
+            )
+        }
+        assertEquals(256, store.readSearchLaunchHistory().size)
+        store.close()
+
+        val reopened = RoomLauncherStore.open(databaseFile)
+        val restored = reopened.readSearchLaunchHistory()
+        assertEquals(256, restored.size)
+        assertEquals(299L, restored.first().lastLaunchedAtMillis)
+        reopened.close()
+    }
+
+    @Test
+    fun versionSixHistoryMigrationFailureRollsBackWithoutChangingExistingSchema() = runTest {
+        migrationHelper.createDatabase(6).closing { connection ->
+            connection.execSQL(
+                "CREATE TABLE search_launch_history (unrelatedOpaque TEXT NOT NULL)",
+            )
+            connection.execSQL(
+                "INSERT INTO search_launch_history (unrelatedOpaque) VALUES ('preserve-me')",
+            )
+        }
+
+        val failure = runCatching {
+            migrationHelper.runMigrationsAndValidate(
+                7,
+                listOf(LauncherMigration6To7),
+            ).close()
+        }.exceptionOrNull()
+        assertTrue(failure != null)
+
+        migrationHelper.runMigrationsAndValidate(6, emptyList()).closing { connection ->
+            assertTextQuery(
+                connection,
+                "SELECT unrelatedOpaque FROM search_launch_history",
+                "preserve-me",
             )
         }
     }

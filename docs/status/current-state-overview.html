@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Quicklauncher implementation, verification, device evidence, and open Phase 5 gates as of 14 September 2026.">
+  <meta name="description" content="Quicklauncher Phase 7 theme-system verification status as of 16 September 2026.">
   <title>Quicklauncher · Current state</title>
   <style>
     :root {
@@ -94,7 +94,7 @@
     .phase-track {
       margin-top: 44px;
       display: grid;
-      grid-template-columns: repeat(7, 1fr);
+      grid-template-columns: repeat(8, 1fr);
       gap: 8px;
     }
     .phase {
@@ -175,7 +175,7 @@
     .score { color: var(--muted); font-size: 12px; white-space: nowrap; }
     .score strong { color: var(--text); font-size: 15px; }
 
-    .schema-line { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-top: 25px; }
+    .schema-line { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin-top: 25px; }
     .schema-node { position: relative; text-align: center; }
     .schema-node::before { content: ""; display: block; height: 3px; margin-bottom: 12px; background: var(--green); }
     .schema-node:first-child::before { border-radius: 999px 0 0 999px; }
@@ -192,10 +192,10 @@
       border-color: rgba(255, 202, 105, .4);
       background: linear-gradient(145deg, rgba(58, 45, 22, .82), rgba(17, 21, 29, .96));
     }
-    .blocker-line { align-self: stretch; border-radius: 999px; background: var(--amber); }
-    .blocker h2 { margin: 0 0 7px; color: var(--amber); font-size: 24px; }
+    .blocker-line { align-self: stretch; border-radius: 999px; background: var(--green); }
+    .blocker h2 { margin: 0 0 7px; color: var(--green); font-size: 24px; }
     .blocker p { max-width: 760px; margin: 0; color: #d5ccbb; }
-    .blocker a { padding: 10px 14px; border: 1px solid rgba(255, 202, 105, .42); border-radius: 10px; color: var(--amber); text-decoration: none; white-space: nowrap; font-size: 13px; font-weight: 700; }
+    .blocker a { padding: 10px 14px; border: 1px solid rgba(101, 217, 155, .42); border-radius: 10px; color: var(--green); text-decoration: none; white-space: nowrap; font-size: 13px; font-weight: 700; }
 
     .command-list { display: grid; gap: 10px; }
     details { border: 1px solid var(--line); border-radius: 13px; background: rgba(17, 21, 29, .72); }
@@ -237,9 +237,9 @@
       <div class="brand"><span class="mark" aria-hidden="true">Q</span> Quicklauncher</div>
       <nav aria-label="Page sections">
         <a href="#architecture">Architecture</a>
-        <a href="#capabilities">Phase 5</a>
+        <a href="#capabilities">Capabilities</a>
         <a href="#evidence">Evidence</a>
-        <a href="#blocker">Open gate</a>
+        <a href="#blocker">Phase 7</a>
       </nav>
     </div>
   </header>
@@ -247,9 +247,9 @@
   <main>
     <section class="hero">
       <div class="shell">
-        <span class="eyebrow">Phase 5 implementation ready · evidence blocked</span>
+        <span class="eyebrow">Phase 7 verified · Phase 8 backup next</span>
         <h1>A launcher built around hard boundaries.</h1>
-        <p class="hero-copy"><strong>Phases 0–4 are complete.</strong> Widgets, shortcuts, profiles, Private Space, indicators, folders, and item actions are implemented and green across local and available device gates. One real managed-work-profile run still stands between Phase 5 and completion.</p>
+        <p class="hero-copy"><strong>Phases 0–7 are complete.</strong> One host-owned theme system now covers deterministic profiles and palettes, bounded imports, Nova/ADW icons, backgrounds, image derivation, accessible Settings, and explicitly confirmed wallpaper execution.</p>
 
         <div class="phase-track" aria-label="Project phase progress">
           <div class="phase done"><span>Phase 0</span><strong>Foundation ✓</strong></div>
@@ -257,8 +257,10 @@
           <div class="phase done"><span>Phase 2</span><strong>Persistence ✓</strong></div>
           <div class="phase done"><span>Phase 3</span><strong>Runtime ✓</strong></div>
           <div class="phase done"><span>Phase 4</span><strong>Production ✓</strong></div>
-          <div class="phase current"><span>Phase 5</span><strong>External gate</strong></div>
-          <div class="phase future"><span>Phase 6</span><strong>Pending</strong></div>
+          <div class="phase done"><span>Phase 5</span><strong>Platform ✓</strong></div>
+          <div class="phase done"><span>Phase 6</span><strong>Search ✓</strong></div>
+          <div class="phase done"><span>Phase 7</span><strong>Themes ✓</strong></div>
+          <div class="phase current"><span>Phase 8</span><strong>Backup</strong></div>
         </div>
       </div>
     </section>
@@ -267,13 +269,13 @@
       <div class="shell">
         <div class="section-head">
           <h2 id="numbers-heading">Verified, not estimated</h2>
-          <p>Latest full runs recorded on 14 September 2026.</p>
+          <p>Latest full runs recorded on 16 September 2026.</p>
         </div>
         <div class="metric-grid">
-          <div class="metric"><span class="value">1,095</span><span class="label">Local JVM and Robolectric tests</span><div class="delta">0 failures · 0 errors</div></div>
-          <div class="metric"><span class="value">3,730</span><span class="label">Tasks in the authoritative build gate</span><div class="delta">Build · lint · boundaries · dependencies</div></div>
-          <div class="metric"><span class="value">121</span><span class="label">Inspected Paparazzi baselines</span><div class="delta">Light · dark · large text · rotation</div></div>
-          <div class="metric"><span class="value">v6</span><span class="label">Current Room schema</span><div class="delta">Adjacent and oldest-to-current migrations</div></div>
+          <div class="metric"><span class="value">1,259</span><span class="label">Local JVM and Robolectric tests</span><div class="delta">0 failures · 0 errors</div></div>
+          <div class="metric"><span class="value">3,807</span><span class="label">Tasks in the authoritative build gate</span><div class="delta">Build · lint · boundaries · dependencies</div></div>
+          <div class="metric"><span class="value">130</span><span class="label">Inspected Paparazzi baselines</span><div class="delta">Light · dark · large text · rotation</div></div>
+          <div class="metric"><span class="value">v7</span><span class="label">Current Room schema</span><div class="delta">Bounded app/shortcut ranking history</div></div>
         </div>
       </div>
     </section>
@@ -289,22 +291,22 @@
             <article class="layer">
               <small>:host:platform</small>
               <h3>Framework adapters</h3>
-              <p>LauncherApps, UserHandle, AppWidgetHost, notification services, intents, drawables, and host views live here.</p>
+              <p>LauncherApps, UserHandle, SAF imports, icon resources, wallpaper, Settings routes, drawables, and host views live here.</p>
             </article>
             <div class="arrow" aria-hidden="true">→</div>
             <article class="layer">
               <small>:host:runtime + :host:data</small>
               <h3>Policy and coordination</h3>
-              <p>Profile filtering, lifecycle ledgers, overlays, store transactions, composition, and cleanup decisions.</p>
+              <p>Profile filtering, search, theme resolution, typed execution, lifecycle ledgers, store transactions, and asset cleanup decisions.</p>
             </article>
             <div class="arrow" aria-hidden="true">→</div>
             <article class="layer">
               <small>Contribution modules</small>
               <h3>Sanitized rendering</h3>
-              <p>Stable IDs, semantic kinds, availability, work badging, indicators, and opaque widget tokens only.</p>
+              <p>Stable IDs, semantic kinds, prepared content, resolved colors/fonts/icons, contrast, work badging, and opaque tokens only.</p>
             </article>
           </div>
-          <div class="boundary">No Android callbacks, Room records, raw notification content, locked private metadata, or mutable collections cross this line.</div>
+          <div class="boundary">No Android callbacks, Room records, raw queries, contact/file content, locked private metadata, or mutable collections cross this line.</div>
         </div>
       </div>
     </section>
@@ -312,8 +314,8 @@
     <section id="capabilities" aria-labelledby="capabilities-heading">
       <div class="shell">
         <div class="section-head">
-          <h2 id="capabilities-heading">Phase 5 capability map</h2>
-          <p>Implementation status is separate from the remaining physical evidence gate.</p>
+          <h2 id="capabilities-heading">Implemented capability map</h2>
+          <p>Phase 7 is complete. One resolved host-owned theme contract is consumed by every host and contribution surface.</p>
         </div>
         <div class="capability-grid">
           <article class="card capability"><header><h3>Widget lifecycle</h3><span class="status">Ready</span></header><p>One durable ID per placement, one live view per surface, and recoverable cleanup across framework and database boundaries.</p><ul><li>Bind, configure, resize, copy, dormancy</li><li>Restart, restore, invalidation, deletion</li><li>Cancellation and rejected-commit leak checks</li></ul></article>
@@ -322,6 +324,10 @@
           <article class="card capability"><header><h3>Notification indicators</h3><span class="status">Ready</span></header><p>The platform reduces notifications to eligible profile/package aggregates. No notification content leaves the adapter or reaches storage.</p><ul><li>None, dot, or approximate count</li><li>Denial, revocation, disconnect, recovery</li><li>API 37 framework revocation race handled</li></ul></article>
           <article class="card capability"><header><h3>Folders</h3><span class="status">Ready</span></header><p>Stable folders retain explicit order and durable hidden members while the open overlay filters current policy.</p><ul><li>Create, rename, reorder, delete</li><li>Keyboard, D-pad, TalkBack alternatives</li><li>Back, Home, and process recreation</li></ul></article>
           <article class="card capability"><header><h3>Item actions</h3><span class="status">Ready</span></header><p>Every action revalidates the current item, package, profile, and policy before execution.</p><ul><li>Favorite, visibility, rename, folders</li><li>Details, uninstall, disable, shortcut removal</li><li>Typed rejection and destructive confirmation</li></ul></article>
+          <article class="card capability"><header><h3>Search engine</h3><span class="status">Ready</span></header><p>One bounded session per presentation with concurrent providers, partial publication, provider-local isolation, and strict generation ownership.</p><ul><li>Debounce, replacement, timeout, cancellation</li><li>Immutable deterministic snapshots</li><li>Stale and post-close output rejected</li></ul></article>
+          <article class="card capability"><header><h3>Search privacy</h3><span class="status">Ready</span></header><p>Profile classification precedes metadata. Work badging is mandatory and ambiguous private data never enters a session or history.</p><ul><li>Permission-local denial and recovery</li><li>Immediate callback-driven result purge</li><li>App/shortcut-only bounded history</li></ul></article>
+          <article class="card capability"><header><h3>Production providers</h3><span class="status">Ready</span></header><p>Nine generated-registry providers cover apps, shortcuts, commands, contacts, authorized files, Settings, GrapheneOS, web, and recovery information.</p><ul><li>Exact Settings route revalidation</li><li>Persisted SAF grants and runtime contacts</li><li>Encoded exact-host HTTPS actions</li></ul></article>
+          <article class="card capability"><header><h3>Theme system</h3><span class="status">Ready</span></header><p>One host resolver supplies the immutable theme used by Material surfaces, Settings, production composition, cold restore, previews, layouts, and blocks.</p><ul><li>Built-in, Material You, Expressive, manual</li><li>Bounded fonts, icons, images, backgrounds</li><li>Explicit typed wallpaper confirmation</li></ul></article>
         </div>
       </div>
     </section>
@@ -334,39 +340,45 @@
         </div>
         <div class="evidence-grid">
           <article class="card evidence-card">
-            <h3>Connected matrices</h3>
+            <h3>Connected device matrices</h3>
             <div class="device-row">
-              <div class="device-name"><strong>AOSP API 35</strong><span>Required minimum</span></div>
-              <div class="bar" aria-label="49 of 50 tests passed"><span style="width:98%"></span></div>
-              <div class="score"><strong>49 / 50</strong><br>1 authority skip</div>
+              <div class="device-name"><strong>AOSP API 35</strong><span>Independent post-repair run</span></div>
+              <div class="bar" aria-label="66 of 69 tests passed"><span style="width:95.65%"></span></div>
+              <div class="score"><strong>66 / 69</strong><br>3 authority skips</div>
             </div>
             <div class="device-row">
-              <div class="device-name"><strong>GrapheneOS</strong><span>Pixel 10a · API 37</span></div>
-              <div class="bar" aria-label="38 of 39 tests passed"><span style="width:97.44%"></span></div>
-              <div class="score"><strong>38 / 39</strong><br>1 authority skip</div>
+              <div class="device-name"><strong>GrapheneOS Phase 6</strong><span>Owner supplied · not rerun</span></div>
+              <div class="bar" aria-label="44 of 47 tests passed"><span style="width:93.62%"></span></div>
+              <div class="score"><strong>44 / 47</strong><br>3 explicit skips</div>
             </div>
             <div class="device-row">
-              <div class="device-name"><strong>Production app</strong><span>Final Graphene rerun</span></div>
-              <div class="bar" aria-label="16 of 16 tests passed"><span style="width:100%"></span></div>
-              <div class="score"><strong>16 / 16</strong><br>all passed</div>
+              <div class="device-name"><strong>Managed work</strong><span>Real disposable profile</span></div>
+              <div class="bar" aria-label="Both managed work tests passed"><span style="width:100%"></span></div>
+              <div class="score"><strong>2 / 2</strong><br>passed</div>
             </div>
             <div class="device-row">
               <div class="device-name"><strong>Private auth</strong><span>Human-assisted flow</span></div>
               <div class="bar" aria-label="Private authentication test passed"><span style="width:100%"></span></div>
               <div class="score"><strong>1 / 1</strong><br>passed</div>
             </div>
+            <div class="device-row">
+              <div class="device-name"><strong>Restoration</strong><span>GrapheneOS baseline</span></div>
+              <div class="bar" aria-label="Device restoration audit passed"><span style="width:100%"></span></div>
+              <div class="score"><strong>Exact</strong><br>hash matched</div>
+            </div>
           </article>
 
           <article class="card evidence-card">
             <h3>Room migration chain</h3>
-            <p style="color:var(--muted);margin:0">Schema 6 preserves widget states, duplicate shortcuts, folder order, app visibility, notification preferences, unrelated fields, and opaque documents.</p>
-            <div class="schema-line" aria-label="Room schemas one through six verified">
+            <p style="color:var(--muted);margin:0">Schema 7 adds bounded app/shortcut ranking history while preserving widget states, duplicate shortcuts, folder order, unrelated fields, and opaque documents.</p>
+            <div class="schema-line" aria-label="Room schemas one through seven verified">
               <div class="schema-node"><b>1</b><span>oldest</span></div>
               <div class="schema-node"><b>2</b><span>adjacent</span></div>
               <div class="schema-node"><b>3</b><span>adjacent</span></div>
               <div class="schema-node"><b>4</b><span>adjacent</span></div>
               <div class="schema-node"><b>5</b><span>adjacent</span></div>
-              <div class="schema-node"><b>6</b><span>current</span></div>
+              <div class="schema-node"><b>6</b><span>adjacent</span></div>
+              <div class="schema-node"><b>7</b><span>current</span></div>
             </div>
             <div class="boundary" style="margin-top:28px">Close + reopen ✓ &nbsp; Injected rollback ✓ &nbsp; Byte preservation ✓</div>
           </article>
@@ -379,10 +391,10 @@
         <article class="card blocker">
           <div class="blocker-line" aria-hidden="true"></div>
           <div>
-            <h2 id="blocker-heading">One device prerequisite is still missing</h2>
-            <p>The reference phone has no managed-work profile. Discovery, mandatory badging, cross-profile launch, pause, resume, quiet-state removal, and callback restoration still need a compliant GrapheneOS device. The notification restricted-settings grant must also be repeated through the intended distribution installer.</p>
+            <h2 id="blocker-heading">Phase 7 required gates complete</h2>
+            <p>The complete theme system passes local, visual, dependency, privacy, Robolectric, and the pinned API 35 full-phone matrix. GrapheneOS results remain owner-supplied evidence reviewed, not independently rerun.</p>
           </div>
-          <a href="phase-5-blocker-and-review-prompt.md">Open handoff ↗</a>
+          <a href="phase-7-theme-evidence.md">Open evidence ↗</a>
         </article>
       </div>
     </section>
@@ -394,16 +406,16 @@
           <p>The status documents retain device fingerprints, restoration steps, durations, and complete results.</p>
         </div>
         <div class="command-list">
-          <details><summary>Authoritative build · 7m47s · passed</summary><pre>./gradlew build checkModuleBoundaries verifyNoGoogleDependencies buildHealth \
+          <details><summary>Authoritative build · 57s · passed</summary><pre>./gradlew build checkModuleBoundaries verifyNoGoogleDependencies buildHealth \
   --no-daemon --no-configuration-cache --console=plain</pre></details>
-          <details><summary>Paparazzi · 2m58s · passed</summary><pre>./gradlew :app:verifyPaparazziStableDebug \
+          <details><summary>Paparazzi · 1m56s · passed</summary><pre>./gradlew :app:verifyPaparazziStableDebug \
   :modules:block:core:verifyPaparazziDebug \
   :modules:layout:core:verifyPaparazziDebug \
   :host:editor:verifyPaparazziDebug \
   :host:runtime:verifyPaparazziDebug \
   :host:settings:verifyPaparazziDebug \
   --no-daemon --no-configuration-cache --console=plain</pre></details>
-          <details><summary>Connected matrix · API 35 and GrapheneOS</summary><pre>./gradlew :host:data:connectedDebugAndroidTest \
+          <details><summary>Connected matrix · API 35 · 2m39s · passed</summary><pre>ANDROID_SERIAL=emulator-5554 ./gradlew :host:data:connectedDebugAndroidTest \
   :host:platform:connectedDebugAndroidTest \
   :host:runtime:connectedDebugAndroidTest \
   :host:editor:connectedDebugAndroidTest \
@@ -416,8 +428,8 @@
 
   <footer>
     <div class="shell">
-      <span>Quicklauncher current state · 14 September 2026</span>
-      <span><a href="current-state.md">Status</a> · <a href="phase-5-device-evidence.md">Device evidence</a> · <a href="phase-5-blocker-and-review-prompt.md">Review prompt</a></span>
+      <span>Quicklauncher current state · 16 September 2026</span>
+      <span><a href="current-state.md">Status</a> · <a href="phase-7-theme-evidence.md">Phase 7 evidence</a> · <a href="phase-6-search-evidence.md">Phase 6 evidence</a></span>
     </div>
   </footer>
 </body>

@@ -6,8 +6,11 @@ import org.quicklauncher.host.runtime.phasefive.PhaseFiveOverlay
 
 import android.app.role.RoleManager
 import android.content.Intent
+import android.content.pm.LauncherApps
 import android.os.ParcelFileDescriptor
 import android.os.SystemClock
+import android.os.UserHandle
+import android.os.UserManager
 import android.view.WindowManager
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -21,19 +24,28 @@ import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.quicklauncher.contracts.domain.PackageName
+import org.quicklauncher.contracts.domain.ShortcutId
 import org.quicklauncher.host.data.preferences.OnboardingState
 import org.quicklauncher.host.data.store.ContentItemKind
 import org.quicklauncher.host.data.store.LauncherStore
 import org.quicklauncher.host.runtime.LauncherRuntime
 import org.quicklauncher.host.runtime.LauncherRuntimeStatus
+import org.quicklauncher.host.runtime.catalog.AppLaunchResult
 import org.quicklauncher.host.runtime.actions.ItemActionResult
 import org.quicklauncher.host.runtime.folders.FolderOperationResult
 import org.quicklauncher.host.runtime.profile.PrivateSpaceEntryPoint
 import org.quicklauncher.host.runtime.profile.PrivateLaunchResult
 import org.quicklauncher.host.runtime.profile.ProfileAvailability
 import org.quicklauncher.host.runtime.profile.ProfileKind
+import org.quicklauncher.host.runtime.profile.WorkModeResult
+import org.quicklauncher.host.runtime.shortcuts.ResolvedShortcutPlacement
+import org.quicklauncher.host.runtime.shortcuts.ShortcutLaunchResult
+import org.quicklauncher.host.runtime.shortcuts.ShortcutPlacementCreation
+import org.quicklauncher.host.runtime.shortcuts.ShortcutTargetIdentity
 
 /** Production-activity coverage for Phase 5 host-owned transient overlays. */
 @RunWith(AndroidJUnit4::class)
@@ -44,6 +56,180 @@ class PhaseFiveOverlayInstrumentedTest {
     private val roleManager = context.getSystemService(RoleManager::class.java)
     private val userId: Int by lazy {
         shell("am get-current-user").trim().toInt().also { require(it >= 0) }
+    }
+
+    @Test
+    fun managedWorkProfileDiscoveryBadgingLaunchPauseResumeAndCallbackRestoration() {
+        assumeTrue(
+            "Managed-work verification requires explicit physical-device orchestration",
+            InstrumentationRegistry.getArguments().getString("phase5ManagedWork") == "true",
+        )
+        val packageName = context.packageName
+        val fixturePackageName = packageName
+        val originalHolders = roleHolders()
+        var activity: MainActivity? = null
+        var workSerial: org.quicklauncher.contracts.domain.ProfileSerial? = null
+        var placementId: org.quicklauncher.contracts.domain.ContentItemId? = null
+        try {
+            runBlocking {
+                requireNotNull(
+                    (context.applicationContext as QuicklauncherApplication).launcherPreferences,
+                ).setOnboardingState(OnboardingState.COMPLETED)
+            }
+            shell("cmd role add-role-holder --user $userId $HOME_ROLE $packageName")
+            assertTrue("Quicklauncher did not become the Home-role holder", waitForRoleHeld())
+            activity = instrumentation.startActivitySync(
+                Intent(context, MainActivity::class.java)
+                    .setAction(Intent.ACTION_MAIN)
+                    .addCategory(Intent.CATEGORY_LAUNCHER)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            ) as MainActivity
+            var launched = activity
+            waitForRuntimeReady(launched)
+
+            val work = waitForWorkProfile(launched, ProfileAvailability.AVAILABLE)
+            workSerial = work.serial
+            val workUser = requireNotNull(
+                context.getSystemService(UserManager::class.java)
+                    .getUserForSerialNumber(work.serial.value),
+            )
+            assertTrue(
+                "Android LauncherApps did not expose the managed-work fixture to the active Home app",
+                context.getSystemService(LauncherApps::class.java)
+                    .getActivityList(fixturePackageName, workUser)
+                    .any { it.componentName.className == ManagedWorkFixtureActivity::class.java.name },
+            )
+            val personalBefore = launched.launcherRuntime().state.value.settingsApps
+                .filterNot { it.workProfile }
+                .mapTo(linkedSetOf()) { it.identity }
+            assertTrue("The personal profile exposed no app for continuity coverage", personalBefore.isNotEmpty())
+            val workApp = waitForSyntheticWorkApp(launched, work.serial, fixturePackageName)
+            assertTrue("The production catalog omitted mandatory work-profile badging", workApp.workProfile)
+            assertTrue(
+                "The production safe layout omitted the accessible work badge",
+                waitForText("${workApp.label}, Work"),
+            )
+
+            assertEquals(
+                AppLaunchResult.Launched,
+                runBlocking { launched.launcherRuntime().launch(workApp.identity) },
+            )
+            assertTrue(
+                "The typed app launch did not foreground the managed-profile target",
+                waitForTopActivityUser(userIdentifier(workUser), fixturePackageName),
+            )
+            device.pressHome()
+            launched = requireNotNull(waitForResumedActivity()) {
+                "Quicklauncher did not resume after the managed-profile app launch"
+            }
+            activity = launched
+            waitForRuntimeReady(launched)
+
+            val shortcutTarget = ShortcutTargetIdentity(
+                work.serial,
+                PackageName.parse(fixturePackageName),
+                ShortcutId.parse(MANAGED_WORK_SHORTCUT_ID),
+            )
+            waitForWorkShortcut(launched, shortcutTarget)
+            val created = runBlocking { launched.phaseFiveHost().createShortcutPlacement(shortcutTarget) }
+            assertTrue(
+                "The production host did not create the managed-profile shortcut placement",
+                created is ShortcutPlacementCreation.Created,
+            )
+            placementId = (created as ShortcutPlacementCreation.Created).placement.id
+            assertEquals(
+                ShortcutLaunchResult.Launched,
+                runBlocking { launched.phaseFiveHost().launchShortcut(placementId) },
+            )
+            assertTrue(
+                "The typed shortcut launch did not foreground the managed-profile target",
+                waitForTopActivityUser(userIdentifier(workUser), fixturePackageName),
+            )
+            device.pressHome()
+            launched = requireNotNull(waitForResumedActivity()) {
+                "Quicklauncher did not resume after the managed-profile shortcut launch"
+            }
+            activity = launched
+            waitForRuntimeReady(launched)
+
+            assertEquals(
+                WorkModeResult.Requested,
+                runBlocking { launched.phaseFiveHost().setWorkMode(work.serial, enabled = false) },
+            )
+            waitForWorkProfile(launched, ProfileAvailability.QUIET)
+            waitForWorkMetadataRemoval(launched, work.serial)
+            assertTrue(
+                "Pausing work changed the personal-profile app collection",
+                launched.launcherRuntime().state.value.settingsApps.any { it.identity in personalBefore },
+            )
+
+            assertEquals(
+                WorkModeResult.Requested,
+                runBlocking { launched.phaseFiveHost().setWorkMode(work.serial, enabled = true) },
+            )
+            waitForWorkProfile(launched, ProfileAvailability.AVAILABLE)
+            waitForSyntheticWorkApp(launched, work.serial, fixturePackageName)
+            val restoredShortcut = waitForWorkShortcut(launched, shortcutTarget)
+            assertTrue(
+                "The managed shortcut placement did not return after the availability callback",
+                launched.phaseFiveHost().shortcutState.value.placements.any {
+                    it.id == placementId && it is ResolvedShortcutPlacement.Available
+                },
+            )
+            assertEquals(shortcutTarget, restoredShortcut.target)
+
+            assertEquals(
+                ItemActionResult.Applied,
+                runBlocking { launched.phaseFiveHost().openItemActions(requireNotNull(placementId)) },
+            )
+            assertEquals(
+                ItemActionResult.Applied,
+                runBlocking {
+                    launched.phaseFiveHost().executeItemAction(
+                        org.quicklauncher.host.runtime.actions.ItemActionCommand.RemoveShortcut(
+                            confirmed = true,
+                        ),
+                    )
+                },
+            )
+            placementId = null
+        } finally {
+            if (activity != null) device.pressHome()
+            val current = waitForResumedActivity() ?: activity
+            if (current != null && workSerial != null) {
+                runCatching {
+                    val state = current.phaseFiveHost().profileState.value.profile(requireNotNull(workSerial))
+                    if (state?.availability == ProfileAvailability.QUIET) {
+                        runBlocking {
+                            current.phaseFiveHost().setWorkMode(requireNotNull(workSerial), enabled = true)
+                        }
+                        waitForWorkProfile(current, ProfileAvailability.AVAILABLE)
+                    }
+                }
+            }
+            if (current != null && placementId != null) {
+                runCatching {
+                    if (runBlocking {
+                            current.phaseFiveHost().openItemActions(requireNotNull(placementId))
+                        } == ItemActionResult.Applied
+                    ) {
+                        runBlocking {
+                            current.phaseFiveHost().executeItemAction(
+                                org.quicklauncher.host.runtime.actions.ItemActionCommand.RemoveShortcut(
+                                    confirmed = true,
+                                ),
+                            )
+                        }
+                    }
+                }
+            }
+            current?.let {
+                instrumentation.runOnMainSync {
+                    if (!it.isFinishing) it.finishAndRemoveTask()
+                }
+            }
+            restoreRoleHolders(packageName, originalHolders)
+        }
     }
 
     @Test
@@ -374,6 +560,97 @@ class PhaseFiveOverlayInstrumentedTest {
         error("Timed out waiting for the production launcher runtime")
     }
 
+    private fun waitForWorkProfile(
+        activity: MainActivity,
+        availability: ProfileAvailability,
+    ): org.quicklauncher.host.runtime.profile.ProfileState {
+        val deadline = SystemClock.uptimeMillis() + TIMEOUT
+        do {
+            activity.phaseFiveHost().profileState.value.profiles
+                .singleOrNull { it.kind == ProfileKind.WORK && it.availability == availability }
+                ?.let { return it }
+            SystemClock.sleep(100L)
+        } while (SystemClock.uptimeMillis() < deadline)
+        error("Timed out waiting for managed-work availability $availability")
+    }
+
+    private fun waitForSyntheticWorkApp(
+        activity: MainActivity,
+        profile: org.quicklauncher.contracts.domain.ProfileSerial,
+        packageName: String,
+    ): org.quicklauncher.host.runtime.LauncherApp {
+        val deadline = SystemClock.uptimeMillis() + TIMEOUT
+        do {
+            activity.launcherRuntime().state.value.settingsApps.singleOrNull {
+                    it.identity.profile == profile &&
+                    it.identity.packageName.value == packageName &&
+                    it.identity.activityName.value == ManagedWorkFixtureActivity::class.java.name
+            }?.let { return it }
+            SystemClock.sleep(100L)
+        } while (SystemClock.uptimeMillis() < deadline)
+        error("Timed out waiting for the synthetic managed-work app")
+    }
+
+    private fun waitForWorkShortcut(
+        activity: MainActivity,
+        target: ShortcutTargetIdentity,
+    ): org.quicklauncher.host.runtime.shortcuts.DiscoveredShortcut {
+        val deadline = SystemClock.uptimeMillis() + TIMEOUT
+        do {
+            activity.phaseFiveHost().shortcutState.value.availableShortcuts
+                .singleOrNull { it.target == target }
+                ?.let { return it }
+            SystemClock.sleep(100L)
+        } while (SystemClock.uptimeMillis() < deadline)
+        error("Timed out waiting for the synthetic managed-work shortcut")
+    }
+
+    private fun waitForWorkMetadataRemoval(
+        activity: MainActivity,
+        profile: org.quicklauncher.contracts.domain.ProfileSerial,
+    ) {
+        val deadline = SystemClock.uptimeMillis() + TIMEOUT
+        do {
+            val runtimeRemoved = activity.launcherRuntime().state.value.settingsApps.none {
+                it.identity.profile == profile
+            }
+            val shortcutsRemoved = activity.phaseFiveHost().shortcutState.value.let { snapshot ->
+                snapshot.availableShortcuts.none { it.target.profile == profile } &&
+                    snapshot.placements.none {
+                        it.target.profile == profile && it is ResolvedShortcutPlacement.Available
+                    }
+            }
+            if (runtimeRemoved && shortcutsRemoved) return
+            SystemClock.sleep(100L)
+        } while (SystemClock.uptimeMillis() < deadline)
+        error("Managed-work metadata remained after the availability callback")
+    }
+
+    private fun waitForTopActivityUser(expectedUserId: Int, expectedPackageName: String): Boolean {
+        val deadline = SystemClock.uptimeMillis() + TIMEOUT
+        do {
+            val matched = shell("dumpsys activity activities").lineSequence().any { line ->
+                "ResumedActivity" in line &&
+                    " u$expectedUserId " in line &&
+                    expectedPackageName in line
+            }
+            if (matched) return true
+            SystemClock.sleep(100L)
+        } while (SystemClock.uptimeMillis() < deadline)
+        return false
+    }
+
+    private fun userIdentifier(user: UserHandle): Int {
+        val encoded = user.toString()
+        require(encoded.startsWith(USER_HANDLE_PREFIX) && encoded.endsWith(USER_HANDLE_SUFFIX)) {
+            "Android returned an unrecognized user handle"
+        }
+        return requireNotNull(
+            encoded.substring(USER_HANDLE_PREFIX.length, encoded.length - USER_HANDLE_SUFFIX.length)
+                .toIntOrNull(),
+        ) { "Android returned an unrecognized user handle" }
+    }
+
     private fun waitForPrivateProfile(activity: MainActivity): org.quicklauncher.host.runtime.profile.ProfileState {
         val deadline = SystemClock.uptimeMillis() + TIMEOUT
         do {
@@ -491,6 +768,8 @@ class PhaseFiveOverlayInstrumentedTest {
         const val HOME_ROLE = "android.app.role.HOME"
         const val TIMEOUT = 15_000L
         const val PRIVATE_AUTH_TIMEOUT = 120_000L
+        const val USER_HANDLE_PREFIX = "UserHandle{"
+        const val USER_HANDLE_SUFFIX = "}"
         val PACKAGE_NAME = Regex("[A-Za-z][A-Za-z0-9_]*(?:\\.[A-Za-z][A-Za-z0-9_]*)+")
     }
 }

@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+summary=0
+if [[ "${1:-}" == "--summary" ]]; then
+  summary=1
+  shift
+fi
+
+sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+if [[ -z "$sdk_root" && -f "$repo_root/local.properties" ]]; then
+  sdk_root="$(sed -n 's/^sdk\.dir=//p' "$repo_root/local.properties" | head -n 1)"
+fi
+if [[ -z "$sdk_root" && -d "${HOME}/.cache/quicklauncher-android-sdk" ]]; then
+  sdk_root="${HOME}/.cache/quicklauncher-android-sdk"
+fi
+if [[ -z "$sdk_root" || ! -d "$sdk_root" ]]; then
+  echo "Android SDK not found. Set ANDROID_HOME or ANDROID_SDK_ROOT." >&2
+  exit 2
+fi
+
+jdk_home="${JAVA_HOME:-}"
+if [[ -z "$jdk_home" ]] && command -v java >/dev/null 2>&1; then
+  java_bin="$(readlink -f "$(command -v java)")"
+  jdk_home="$(cd "$(dirname "$java_bin")/.." && pwd)"
+fi
+
+cache_dir="${XDG_CACHE_HOME:-${HOME}/.cache}/quicklauncher-agent-tools"
+jdk_cache="$cache_dir/jdk17-home"
+if [[ -z "$jdk_home" && -f "$jdk_cache" ]]; then
+  cached_home="$(cat "$jdk_cache")"
+  if [[ -x "$cached_home/bin/java" || -x "$cached_home/lib/openjdk/bin/java" ]]; then
+    jdk_home="$cached_home"
+  fi
+fi
+
+if [[ -z "$jdk_home" ]]; then
+  if ! command -v nix >/dev/null 2>&1; then
+    echo "JDK 17 not found. Set JAVA_HOME or install Nix." >&2
+    exit 2
+  fi
+  jdk_home="$(nix eval --raw nixpkgs#jdk17.outPath)"
+  mkdir -p "$cache_dir"
+  printf '%s\n' "$jdk_home" > "$jdk_cache"
+fi
+
+if [[ -x "$jdk_home/lib/openjdk/bin/java" && ! -x "$jdk_home/bin/java" ]]; then
+  jdk_home="$jdk_home/lib/openjdk"
+fi
+if [[ ! -x "$jdk_home/bin/java" ]]; then
+  echo "JAVA_HOME does not contain bin/java: $jdk_home" >&2
+  exit 2
+fi
+
+export JAVA_HOME="$jdk_home"
+export ANDROID_HOME="$sdk_root"
+export ANDROID_SDK_ROOT="$sdk_root"
+export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$PATH"
+
+if [[ "$summary" -eq 0 ]]; then
+  exec "$repo_root/gradlew" "$@"
+fi
+
+log_dir="${QL_AGENT_LOG_DIR:-${TMPDIR:-/tmp}/quicklauncher-agent-logs}"
+mkdir -p "$log_dir"
+timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+log_file="$log_dir/gradle-${timestamp}-$$.log"
+started="$(date +%s)"
+
+set +e
+"$repo_root/gradlew" "$@" >"$log_file" 2>&1
+status=$?
+set -e
+
+finished="$(date +%s)"
+duration=$((finished - started))
+result_line="$(grep -E 'BUILD (SUCCESSFUL|FAILED)' "$log_file" | tail -n 1 || true)"
+task_count="$(grep -c '^> Task ' "$log_file" || true)"
+test_summary="$(python3 - "$repo_root" "$started" <<'PY'
+import sys
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
+repo = Path(sys.argv[1])
+started = int(sys.argv[2])
+counts = {"tests": 0, "failures": 0, "errors": 0, "skipped": 0}
+reports = 0
+for path in repo.glob("**/build/test-results/**/TEST-*.xml"):
+    try:
+        if path.stat().st_mtime < started - 1:
+            continue
+        root = ET.parse(path).getroot()
+    except (OSError, ET.ParseError):
+        continue
+    reports += 1
+    for key in counts:
+        counts[key] += int(root.attrib.get(key, 0) or 0)
+if reports:
+    print(
+        f"{counts['tests']} total, {counts['failures']} failures, "
+        f"{counts['errors']} errors, {counts['skipped']} skipped "
+        f"across {reports} reports"
+    )
+else:
+    print("no new XML test reports")
+PY
+)"
+
+printf 'Gradle status: %s\n' "$status"
+printf 'Duration: %ss\n' "$duration"
+printf 'Task events: %s\n' "$task_count"
+printf 'Tests: %s\n' "$test_summary"
+printf 'Result: %s\n' "${result_line:-no Gradle result line found}"
+printf 'Full log: %s\n' "$log_file"
+
+if [[ "$status" -ne 0 ]]; then
+  printf '\nFailure tail:\n'
+  tail -n 120 "$log_file"
+fi
+
+exit "$status"

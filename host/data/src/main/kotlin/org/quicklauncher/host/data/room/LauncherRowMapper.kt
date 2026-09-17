@@ -84,6 +84,15 @@ internal fun LauncherRows.toLauncherSnapshot(): LauncherSnapshot {
     val storedMetadata = checkNotNull(metadata) {
         "A populated launcher database must contain store metadata"
     }
+    val restoredThemeProfiles = themeProfiles.mapNotNull(ThemeProfileEntity::toRecordOrNull)
+    val restoredThemeIds = restoredThemeProfiles.mapTo(HashSet(), ThemeProfileRecord::id)
+    val restoredDestinationIds = destinations.mapTo(HashSet()) { it.id }
+    val restoredBackgrounds = destinationBackgrounds
+        .mapNotNull(DestinationBackgroundEntity::toRecordOrNull)
+        .filter { background ->
+            background.themeProfileId in restoredThemeIds &&
+                background.destinationId.value in restoredDestinationIds
+        }
     return LauncherSnapshot(
         revision = StoreRevision.of(storedMetadata.revision),
         startDestinationId = DestinationId.parse(storedMetadata.startDestinationId),
@@ -145,24 +154,32 @@ internal fun LauncherRows.toLauncherSnapshot(): LauncherSnapshot {
         },
         appOverrides = appOverrides.map(AppOverrideEntity::toRecord),
         widgetPlacements = widgetPlacements.map(WidgetPlacementEntity::toRecord),
-        themeProfiles = themeProfiles.map { entity ->
-            ThemeProfileRecord(
-                id = ThemeProfileId.parse(entity.id),
-                name = entity.name,
-                encoded = entity.encodedTheme,
-                schemaVersion = entity.schemaVersion,
-            )
-        },
-        destinationBackgrounds = destinationBackgrounds.map { entity ->
-            DestinationBackgroundRecord(
-                destinationId = DestinationId.parse(entity.destinationId),
-                themeProfileId = ThemeProfileId.parse(entity.themeProfileId),
-                encoded = entity.encodedBackground,
-                schemaVersion = entity.schemaVersion,
-            )
-        },
+        themeProfiles = restoredThemeProfiles,
+        destinationBackgrounds = restoredBackgrounds,
         crashMarkers = crashMarkers.map(CrashMarkerEntity::toRecord),
     )
+}
+
+private fun ThemeProfileEntity.toRecordOrNull(): ThemeProfileRecord? = try {
+    ThemeProfileRecord(
+        id = ThemeProfileId.parse(id),
+        name = name,
+        encoded = encodedTheme,
+        schemaVersion = schemaVersion,
+    )
+} catch (_: IllegalArgumentException) {
+    null
+}
+
+private fun DestinationBackgroundEntity.toRecordOrNull(): DestinationBackgroundRecord? = try {
+    DestinationBackgroundRecord(
+        destinationId = DestinationId.parse(destinationId),
+        themeProfileId = ThemeProfileId.parse(themeProfileId),
+        encoded = encodedBackground,
+        schemaVersion = schemaVersion,
+    )
+} catch (_: IllegalArgumentException) {
+    null
 }
 
 internal fun LauncherSnapshot.toLauncherRows(): LauncherRows = LauncherRows(

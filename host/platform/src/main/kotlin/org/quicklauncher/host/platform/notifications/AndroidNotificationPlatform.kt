@@ -141,8 +141,15 @@ private class FrameworkNotificationBackend(context: Context) : NotificationBacke
                 IntentFilter().apply {
                     addAction(Intent.ACTION_PROFILE_AVAILABLE)
                     addAction(Intent.ACTION_PROFILE_UNAVAILABLE)
+                    addAction(Intent.ACTION_PROFILE_ACCESSIBLE)
+                    addAction(Intent.ACTION_PROFILE_INACCESSIBLE)
                     addAction(Intent.ACTION_PROFILE_ADDED)
                     addAction(Intent.ACTION_PROFILE_REMOVED)
+                    addAction(Intent.ACTION_MANAGED_PROFILE_AVAILABLE)
+                    addAction(Intent.ACTION_MANAGED_PROFILE_UNAVAILABLE)
+                    addAction(Intent.ACTION_MANAGED_PROFILE_UNLOCKED)
+                    addAction(Intent.ACTION_MANAGED_PROFILE_ADDED)
+                    addAction(Intent.ACTION_MANAGED_PROFILE_REMOVED)
                 },
                 Context.RECEIVER_EXPORTED,
             )

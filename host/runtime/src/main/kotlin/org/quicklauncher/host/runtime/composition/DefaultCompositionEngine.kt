@@ -102,7 +102,7 @@ class DefaultCompositionEngine(
                 request.snapshot,
                 destination.id,
                 role,
-                request.environment,
+                request.environment.forDestination(destination.id),
                 desiredInstances,
                 request.currentInteractive,
             )
@@ -240,7 +240,7 @@ class DefaultCompositionEngine(
         )
         val slots = children.map { it.state }
         val state = LayoutRenderState(
-            environment.theme,
+            environment.resolvedTheme.themeFor(descriptor.metadata.id),
             environment.window,
             environment.backgroundContrast,
             RenderStatus.Ready,
@@ -328,7 +328,7 @@ class DefaultCompositionEngine(
             return placeholder(instanceId, issue, environment)
         }
         val state = BlockRenderState(
-            environment.theme,
+            environment.resolvedTheme.themeFor(descriptor.metadata.id),
             environment.window,
             environment.backgroundContrast,
             preparedContent.status,
@@ -344,6 +344,7 @@ class DefaultCompositionEngine(
             state,
             TreeSlotRenderer(children, environment),
             actionsFor(composition, environment.blockActions),
+            descriptor.requiresSearchPresentation,
             environment,
         )
     }
@@ -670,6 +671,7 @@ private class BlockNode(
     private val state: BlockRenderState,
     private val slots: SlotRenderer,
     private val actions: ActionSink<BlockAction>,
+    private val requiresSearchPresentation: Boolean,
     private val environment: CompositionEnvironment,
 ) : RenderNode {
     @Composable
@@ -698,7 +700,18 @@ private class BlockNode(
         ) {
             Box {
                 session.Render(
-                    BlockRenderInput(instanceId, state, slots, environment.contentRenderer, actions),
+                    BlockRenderInput(
+                        instanceId,
+                        state,
+                        slots,
+                        environment.contentRenderer,
+                        actions,
+                        if (requiresSearchPresentation && state.composition.isInteractive) {
+                            environment.searchPresentations.presentationFor(instanceId)
+                        } else {
+                            null
+                        },
+                    ),
                 )
             }
         }

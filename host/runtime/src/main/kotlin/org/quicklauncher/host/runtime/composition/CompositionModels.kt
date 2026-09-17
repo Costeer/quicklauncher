@@ -3,6 +3,8 @@ package org.quicklauncher.host.runtime.composition
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import java.util.Collections
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import org.quicklauncher.contracts.domain.DestinationId
 import org.quicklauncher.contracts.domain.ModuleInstanceId
 import org.quicklauncher.contracts.domain.StableKey
@@ -19,8 +21,10 @@ import org.quicklauncher.contracts.ui.PreparedHostContent
 import org.quicklauncher.contracts.ui.PreparedHostSurface
 import org.quicklauncher.contracts.ui.PreparedContentItem
 import org.quicklauncher.contracts.ui.WindowInfo
+import org.quicklauncher.contracts.ui.SearchPresentation
 import org.quicklauncher.host.data.store.LauncherSnapshot
 import org.quicklauncher.host.runtime.SelectedLayoutRestorer
+import org.quicklauncher.host.runtime.theme.ResolvedLauncherTheme
 
 private fun <T> immutable(values: Collection<T>): List<T> =
     Collections.unmodifiableList(ArrayList(values))
@@ -28,6 +32,22 @@ private fun <T> immutable(values: Collection<T>): List<T> =
 fun interface PreparedContentSource {
     fun contentFor(instanceId: ModuleInstanceId): PreparedBlockContent
 }
+
+fun interface SearchPresentationSource {
+    val hasActiveQuery: StateFlow<Boolean>
+        get() = InactiveSearchPresentation
+
+    @Composable
+    fun presentationFor(instanceId: ModuleInstanceId): SearchPresentation?
+
+    fun setHostActive(active: Boolean) = Unit
+
+    fun requestFocus(): Boolean = false
+
+    fun dismissAll() = Unit
+}
+
+private val InactiveSearchPresentation = MutableStateFlow(false)
 
 data class PreparedBlockContent(
     val status: org.quicklauncher.contracts.ui.RenderStatus,
@@ -59,17 +79,55 @@ fun interface RendererFailureSink {
 }
 
 data class CompositionEnvironment(
-    val theme: LauncherTheme,
+    val resolvedTheme: ResolvedLauncherTheme,
+    val destinationThemes: Map<DestinationId, ResolvedLauncherTheme> = emptyMap(),
+    val fallbackResolvedTheme: ResolvedLauncherTheme = resolvedTheme,
     val window: WindowInfo,
-    val backgroundContrast: BackgroundContrast,
     val editorMode: EditorMode,
     val contentSource: PreparedContentSource = PreparedContentSource { PreparedBlockContent.Empty },
     val contentRenderer: PreparedContentRenderer = EmptyPreparedContentRenderer,
     val placeholderRenderer: CompositionPlaceholderRenderer = CompositionPlaceholderRenderer { _, _ -> },
     val layoutActions: ActionSink<LayoutAction> = RejectingLayoutActions,
     val blockActions: ActionSink<BlockAction> = RejectingBlockActions,
+    val searchPresentations: SearchPresentationSource = SearchPresentationSource { null },
     val rendererFailures: RendererFailureSink = RendererFailureSink { _, _ -> },
-)
+) {
+    val theme: LauncherTheme
+        get() = resolvedTheme.theme
+
+    val backgroundContrast: BackgroundContrast
+        get() = resolvedTheme.backgroundContrast
+
+    fun forDestination(destinationId: DestinationId): CompositionEnvironment {
+        val destinationTheme = destinationThemes[destinationId] ?: fallbackResolvedTheme
+        return if (destinationTheme == resolvedTheme) this else copy(resolvedTheme = destinationTheme)
+    }
+
+    constructor(
+        theme: LauncherTheme,
+        window: WindowInfo,
+        backgroundContrast: BackgroundContrast,
+        editorMode: EditorMode,
+        contentSource: PreparedContentSource = PreparedContentSource { PreparedBlockContent.Empty },
+        contentRenderer: PreparedContentRenderer = EmptyPreparedContentRenderer,
+        placeholderRenderer: CompositionPlaceholderRenderer = CompositionPlaceholderRenderer { _, _ -> },
+        layoutActions: ActionSink<LayoutAction> = RejectingLayoutActions,
+        blockActions: ActionSink<BlockAction> = RejectingBlockActions,
+        searchPresentations: SearchPresentationSource = SearchPresentationSource { null },
+        rendererFailures: RendererFailureSink = RendererFailureSink { _, _ -> },
+    ) : this(
+        resolvedTheme = ResolvedLauncherTheme(theme, backgroundContrast),
+        window = window,
+        editorMode = editorMode,
+        contentSource = contentSource,
+        contentRenderer = contentRenderer,
+        placeholderRenderer = placeholderRenderer,
+        layoutActions = layoutActions,
+        blockActions = blockActions,
+        searchPresentations = searchPresentations,
+        rendererFailures = rendererFailures,
+    )
+}
 
 data class CompositionRequest(
     val snapshot: LauncherSnapshot,

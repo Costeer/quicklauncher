@@ -9,6 +9,7 @@ import org.quicklauncher.contracts.domain.ContentItemId
 import org.quicklauncher.contracts.domain.ContributionId
 import org.quicklauncher.contracts.domain.ModuleInstanceId
 import org.quicklauncher.contracts.domain.ProfileSerial
+import org.quicklauncher.contracts.domain.SearchResultId
 import org.quicklauncher.contracts.domain.SlotTypeId
 import org.quicklauncher.contracts.domain.StableKey
 
@@ -22,11 +23,215 @@ data class LauncherTheme(
     val accent: ArgbColor,
     val textScale: Float,
     val reducedMotion: Boolean,
+    val colors: ResolvedColorRoles = ResolvedColorRoles.basic(
+        foreground = foreground,
+        background = background,
+        accent = accent,
+    ),
+    val fonts: ResolvedFontRoles = ResolvedFontRoles.System,
+    val shapes: ResolvedShapeRoles = ResolvedShapeRoles.Default,
+    val spacing: ResolvedSpacing = ResolvedSpacing.Default,
+    val icons: ResolvedIconRendering = ResolvedIconRendering.Default,
+    val accessibility: ResolvedAccessibilityValues = ResolvedAccessibilityValues.Default,
 ) {
     init {
         require(textScale > 0f && textScale.isFinite()) {
             "Theme text scale must be finite and greater than zero"
         }
+    }
+}
+
+data class ResolvedCornerRadii(
+    val extraSmallDp: Float,
+    val smallDp: Float,
+    val mediumDp: Float,
+    val largeDp: Float,
+    val extraLargeDp: Float,
+) {
+    init {
+        require(listOf(extraSmallDp, smallDp, mediumDp, largeDp, extraLargeDp).all {
+            it.isFinite() && it in 0f..96f
+        }) { "Resolved corner radii must be finite and between zero and 96 dp" }
+    }
+
+    companion object {
+        val Default = ResolvedCornerRadii(4f, 8f, 12f, 16f, 28f)
+    }
+}
+
+data class ResolvedShapeRoles(
+    val corners: ResolvedCornerRadii,
+    val fullyRoundedDp: Float,
+) {
+    init {
+        require(fullyRoundedDp.isFinite() && fullyRoundedDp in 0f..1_024f) {
+            "Fully rounded shape size must be finite and bounded"
+        }
+    }
+
+    companion object {
+        val Default = ResolvedShapeRoles(ResolvedCornerRadii.Default, 1_024f)
+    }
+}
+
+data class ResolvedSpacing(
+    val extraSmallDp: Float,
+    val smallDp: Float,
+    val mediumDp: Float,
+    val largeDp: Float,
+    val extraLargeDp: Float,
+) {
+    init {
+        require(listOf(extraSmallDp, smallDp, mediumDp, largeDp, extraLargeDp).all {
+            it.isFinite() && it in 0f..128f
+        }) { "Resolved spacing must be finite and between zero and 128 dp" }
+    }
+
+    companion object {
+        val Default = ResolvedSpacing(4f, 8f, 16f, 24f, 32f)
+    }
+}
+
+data class ResolvedIconRendering(
+    val smallSizeDp: Float,
+    val standardSizeDp: Float,
+    val largeSizeDp: Float,
+    val opticalScale: Float,
+    val useRoundedMasks: Boolean,
+) {
+    init {
+        require(listOf(smallSizeDp, standardSizeDp, largeSizeDp).all {
+            it.isFinite() && it in 1f..256f
+        }) { "Resolved icon sizes must be finite and bounded" }
+        require(opticalScale.isFinite() && opticalScale in 0.5f..1.5f) {
+            "Resolved icon optical scale must be finite and bounded"
+        }
+    }
+
+    companion object {
+        val Default = ResolvedIconRendering(24f, 48f, 64f, 1f, true)
+    }
+}
+
+data class ResolvedAccessibilityValues(
+    val minimumTouchTargetDp: Float,
+    val highContrast: Boolean,
+    val boldText: Boolean,
+) {
+    init {
+        require(minimumTouchTargetDp.isFinite() && minimumTouchTargetDp in 24f..96f) {
+            "Minimum touch target must be finite and between 24 and 96 dp"
+        }
+    }
+
+    companion object {
+        val Default = ResolvedAccessibilityValues(48f, false, false)
+    }
+}
+
+/** Complete platform-neutral Material color roles selected by the host. */
+data class ResolvedColorRoles(
+    val primary: ArgbColor,
+    val onPrimary: ArgbColor,
+    val primaryContainer: ArgbColor,
+    val onPrimaryContainer: ArgbColor,
+    val secondary: ArgbColor,
+    val onSecondary: ArgbColor,
+    val secondaryContainer: ArgbColor,
+    val onSecondaryContainer: ArgbColor,
+    val tertiary: ArgbColor,
+    val onTertiary: ArgbColor,
+    val tertiaryContainer: ArgbColor,
+    val onTertiaryContainer: ArgbColor,
+    val error: ArgbColor,
+    val onError: ArgbColor,
+    val errorContainer: ArgbColor,
+    val onErrorContainer: ArgbColor,
+    val surface: ArgbColor,
+    val onSurface: ArgbColor,
+    val surfaceVariant: ArgbColor,
+    val onSurfaceVariant: ArgbColor,
+    val outline: ArgbColor,
+    val outlineVariant: ArgbColor,
+    val inverseSurface: ArgbColor,
+    val inverseOnSurface: ArgbColor,
+    val inversePrimary: ArgbColor,
+    val scrim: ArgbColor,
+) {
+    companion object {
+        fun basic(
+            foreground: ArgbColor,
+            background: ArgbColor,
+            accent: ArgbColor,
+        ): ResolvedColorRoles = ResolvedColorRoles(
+            primary = accent,
+            onPrimary = background,
+            primaryContainer = accent,
+            onPrimaryContainer = background,
+            secondary = accent,
+            onSecondary = background,
+            secondaryContainer = background,
+            onSecondaryContainer = foreground,
+            tertiary = accent,
+            onTertiary = background,
+            tertiaryContainer = background,
+            onTertiaryContainer = foreground,
+            error = ArgbColor.of(0xffba1a1aL),
+            onError = ArgbColor.of(0xffffffffL),
+            errorContainer = ArgbColor.of(0xffffdad6L),
+            onErrorContainer = ArgbColor.of(0xff410002L),
+            surface = background,
+            onSurface = foreground,
+            surfaceVariant = background,
+            onSurfaceVariant = foreground,
+            outline = foreground,
+            outlineVariant = foreground,
+            inverseSurface = foreground,
+            inverseOnSurface = background,
+            inversePrimary = accent,
+            scrim = ArgbColor.of(0xff000000L),
+        )
+    }
+}
+
+enum class ResolvedFontSource {
+    SYSTEM,
+    IMPORTED,
+}
+
+data class ResolvedFontRole(
+    val source: ResolvedFontSource,
+    val assetToken: StableKey?,
+    val weight: Int,
+    val italic: Boolean,
+) {
+    init {
+        require(weight in 1..1000) { "Resolved font weight must be between 1 and 1000" }
+        require((source == ResolvedFontSource.IMPORTED) == (assetToken != null)) {
+            "Imported font roles require an opaque asset token and system roles must not have one"
+        }
+    }
+
+    companion object {
+        val System = ResolvedFontRole(ResolvedFontSource.SYSTEM, null, 400, false)
+    }
+}
+
+data class ResolvedFontRoles(
+    val display: ResolvedFontRole,
+    val headline: ResolvedFontRole,
+    val title: ResolvedFontRole,
+    val body: ResolvedFontRole,
+    val label: ResolvedFontRole,
+) {
+    companion object {
+        val System = ResolvedFontRoles(
+            display = ResolvedFontRole.System,
+            headline = ResolvedFontRole.System,
+            title = ResolvedFontRole.System,
+            body = ResolvedFontRole.System,
+            label = ResolvedFontRole.System,
+        )
     }
 }
 
@@ -188,6 +393,36 @@ enum class PreparedAvailability {
     UNAVAILABLE,
 }
 
+enum class PreparedIconSource {
+    APPLICATION,
+    ICON_PACK,
+}
+
+/** Host-decoded bounded icon bytes. Contributions may only hand this value to the host renderer. */
+class PreparedIcon private constructor(
+    bytes: ByteArray,
+    val source: PreparedIconSource,
+) {
+    private val value = bytes.copyOf()
+
+    fun bytes(): ByteArray = value.copyOf()
+
+    override fun equals(other: Any?): Boolean = other is PreparedIcon &&
+        source == other.source && value.contentEquals(other.value)
+
+    override fun hashCode(): Int = 31 * value.contentHashCode() + source.hashCode()
+    override fun toString(): String = "PreparedIcon(source=$source, content=redacted)"
+
+    companion object {
+        fun of(bytes: ByteArray, source: PreparedIconSource): PreparedIcon {
+            require(bytes.size in 1..MAX_PREPARED_ICON_BYTES) { "Prepared icon exceeds its byte bound" }
+            return PreparedIcon(bytes, source)
+        }
+
+        private const val MAX_PREPARED_ICON_BYTES = 1024 * 1024
+    }
+}
+
 /** Sanitized notification state. It deliberately has no field capable of carrying content. */
 sealed interface NotificationIndicator {
     data object None : NotificationIndicator
@@ -213,6 +448,7 @@ data class PreparedContentItem(
         PreparedAvailability.UNAVAILABLE
     },
     val indicator: NotificationIndicator = NotificationIndicator.None,
+    val icon: PreparedIcon? = null,
 ) {
     init {
         require(label.isNotBlank()) { "Prepared content label must not be blank" }
@@ -305,6 +541,85 @@ class BlockRenderState(
     val childSlots: List<SlotRenderState> = immutableList(childSlots)
 }
 
+enum class SearchPresentationProviderState {
+    IDLE,
+    LOADING,
+    READY,
+    DENIED,
+    UNAVAILABLE,
+    TIMED_OUT,
+    FAILED,
+}
+
+data class SearchPresentationToken(
+    val sessionId: Long,
+    val generation: Long,
+    val providerId: ContributionId,
+    val resultId: SearchResultId,
+)
+
+data class PreparedSearchResult(
+    val token: SearchPresentationToken,
+    val providerLabel: String,
+    val title: String,
+    val subtitle: String?,
+    val workBadged: Boolean,
+) {
+    init {
+        require(providerLabel.isNotBlank()) { "Prepared search provider label must not be blank" }
+        require(title.isNotBlank()) { "Prepared search title must not be blank" }
+        require(subtitle == null || subtitle.isNotBlank()) {
+            "Prepared search subtitle must be null or nonblank"
+        }
+    }
+
+    override fun toString(): String = "PreparedSearchResult(workBadged=$workBadged, content=redacted)"
+}
+
+class SearchPresentationState(
+    val query: String,
+    results: Collection<PreparedSearchResult>,
+    providerStates: Map<ContributionId, SearchPresentationProviderState>,
+    providerLabels: Map<ContributionId, String> = emptyMap(),
+    val focusRequestId: Long = 0L,
+) {
+    val results: List<PreparedSearchResult> = immutableList(results)
+    val providerStates: Map<ContributionId, SearchPresentationProviderState> =
+        Collections.unmodifiableMap(LinkedHashMap(providerStates))
+    val providerLabels: Map<ContributionId, String> =
+        Collections.unmodifiableMap(LinkedHashMap(providerLabels))
+
+    init {
+        require(query.length <= 512) { "Presentation query must not exceed 512 characters" }
+        require('\u0000' !in query) { "Presentation query must not contain a null character" }
+        require(providerLabels.values.all(String::isNotBlank)) {
+            "Presentation provider labels must not be blank"
+        }
+        require(focusRequestId >= 0L) { "Search focus request identity must not be negative" }
+    }
+}
+
+sealed interface SearchPresentationAction {
+    data class QueryChanged(
+        val value: String,
+        val minimumCharacters: Int = 0,
+    ) : SearchPresentationAction {
+        init {
+            require(minimumCharacters in 0..32) {
+                "Minimum search characters must be between 0 and 32"
+            }
+        }
+        override fun toString(): String = "QueryChanged(value=redacted)"
+    }
+    data class Activate(val token: SearchPresentationToken) : SearchPresentationAction
+    data object Dismiss : SearchPresentationAction
+}
+
+data class SearchPresentation(
+    val state: SearchPresentationState,
+    val actions: ActionSink<SearchPresentationAction>,
+)
+
 data class LayoutRenderInput(
     val instanceId: ModuleInstanceId,
     val state: LayoutRenderState,
@@ -318,6 +633,7 @@ data class BlockRenderInput(
     val slots: SlotRenderer,
     val content: PreparedContentRenderer,
     val actions: ActionSink<BlockAction>,
+    val search: SearchPresentation? = null,
 )
 
 fun interface ActionSink<in A> {

@@ -31,10 +31,56 @@ import org.quicklauncher.contracts.domain.ProfileSerial
 import org.quicklauncher.contracts.domain.SchemaVersion
 import org.quicklauncher.contracts.domain.ShortcutId
 import org.quicklauncher.contracts.domain.StableKey
+import org.quicklauncher.contracts.domain.ThemeProfileId
 import org.quicklauncher.host.data.spatial.DestinationCoordinate
 import org.quicklauncher.host.data.spatial.DestinationVector
 
 class InMemoryLauncherStoreTest {
+    @Test
+    fun `theme profile and destination background edits are atomic and reference safe`() = runTest {
+        val store = bootstrappedStore()
+        val profileId = ThemeProfileId.parse("org.quicklauncher.theme/store-test")
+        val profile = ThemeProfileRecord(profileId, "Store test", "opaque-profile", 1)
+        val destinationId = requireNotNull(store.read().startDestinationId)
+        val background = DestinationBackgroundRecord(
+            destinationId,
+            profileId,
+            "opaque-background",
+            1,
+        )
+        val before = store.read()
+
+        val inserted = store.commit(
+            LauncherTransaction(
+                before.revision,
+                listOf(LauncherEdit.PutThemeProfile(profile), LauncherEdit.PutDestinationBackground(background)),
+            ),
+        ).committedState()
+        assertEquals(listOf(profile), inserted.themeProfiles)
+        assertEquals(listOf(background), inserted.destinationBackgrounds)
+
+        val rejected = store.commit(
+            LauncherTransaction(
+                inserted.revision,
+                listOf(LauncherEdit.DeleteThemeProfile(profileId, confirmed = true)),
+            ),
+        ) as CommitResult.Rejected
+        assertSame(inserted, rejected.current)
+        assertSame(inserted, store.read())
+
+        val deleted = store.commit(
+            LauncherTransaction(
+                inserted.revision,
+                listOf(
+                    LauncherEdit.DeleteDestinationBackground(destinationId),
+                    LauncherEdit.DeleteThemeProfile(profileId, confirmed = true),
+                ),
+            ),
+        ).committedState()
+        assertTrue(deleted.themeProfiles.isEmpty())
+        assertTrue(deleted.destinationBackgrounds.isEmpty())
+    }
+
     @Test
     fun `onboarding plan replaces pristine safe state atomically and rejects invalid plans unchanged`() = runTest {
         val store = InMemoryLauncherStore(placementPolicy = PlacementPolicy { null })

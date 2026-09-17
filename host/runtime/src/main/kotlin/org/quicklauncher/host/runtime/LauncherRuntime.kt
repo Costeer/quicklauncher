@@ -87,6 +87,7 @@ data class LauncherApp(
     val workProfile: Boolean,
     val favorite: Boolean = false,
     val collectionVisible: Boolean = true,
+    val icon: org.quicklauncher.host.runtime.catalog.AppIcon? = null,
 )
 
 class LauncherRuntimeState(
@@ -604,6 +605,7 @@ class DefaultLauncherRuntime(
                             workProfile = profile.kind == AppProfileKind.WORK,
                             favorite = app.favorite,
                             collectionVisible = app.collectionVisible,
+                            icon = app.icon,
                         )
                     }
             }

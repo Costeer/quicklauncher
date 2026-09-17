@@ -254,3 +254,17 @@ internal data class StoreMetadataEntity(
         const val SINGLETON_KEY: Int = 1
     }
 }
+
+@Entity(
+    tableName = "search_launch_history",
+    primaryKeys = ["targetKind", "profileSerial", "packageName", "targetName"],
+    indices = [Index(value = ["lastLaunchedAtMillis"])],
+)
+internal data class SearchLaunchHistoryEntity(
+    val targetKind: String,
+    val profileSerial: Long,
+    val packageName: String,
+    val targetName: String,
+    val launchCount: Int,
+    val lastLaunchedAtMillis: Long,
+)

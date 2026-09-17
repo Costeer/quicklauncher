@@ -12,7 +12,7 @@ interface LauncherStore {
 }
 
 /** A launcher store whose owned persistence resources can be released deterministically. */
-interface CloseableLauncherStore : LauncherStore, AutoCloseable
+interface CloseableLauncherStore : LauncherStore, SearchLaunchHistoryStore, AutoCloseable
 
 sealed interface CommitResult {
     data class Committed(val state: LauncherSnapshot) : CommitResult

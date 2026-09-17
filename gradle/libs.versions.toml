@@ -22,6 +22,7 @@ protobuf = "4.36.0"
 protobuf-plugin = "0.10.0"
 dependency-analysis = "3.18.0"
 licensee = "1.14.1"
+material-components = "1.14.0"
 
 [libraries]
 androidx-activity = { module = "androidx.activity:activity", version.ref = "activity-compose" }
@@ -66,6 +67,7 @@ kotlinx-serialization-core = { module = "org.jetbrains.kotlinx:kotlinx-serializa
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinx-coroutines" }
 protobuf-java-lite = { module = "com.google.protobuf:protobuf-javalite", version.ref = "protobuf" }
+material-color-utilities = { module = "com.google.android.material:material", version.ref = "material-components" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

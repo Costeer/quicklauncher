@@ -13,6 +13,19 @@ import org.quicklauncher.contracts.domain.StableKey
 
 class RenderContractTest {
     @Test
+    fun `resolved theme publishes bounded non-color tokens`() {
+        val resolved = theme()
+
+        assertEquals(12f, resolved.shapes.corners.mediumDp)
+        assertEquals(16f, resolved.spacing.mediumDp)
+        assertEquals(48f, resolved.icons.standardSizeDp)
+        assertEquals(48f, resolved.accessibility.minimumTouchTargetDp)
+        assertThrows(IllegalArgumentException::class.java) {
+            ResolvedSpacing(-1f, 8f, 16f, 24f, 32f)
+        }
+    }
+
+    @Test
     fun `render state snapshots caller collections`() {
         val placements = mutableListOf(
             PlacedChild(

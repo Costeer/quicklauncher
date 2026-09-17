@@ -291,6 +291,7 @@ class ContributionRegistryProcessor(
             compatibleSlotTypes = strings("compatibleSlotTypes"),
             childSlots = annotations("childSlots").map { it.slot() },
             occupiedScrollAxes = enumNames("occupiedScrollAxes"),
+            requiresSearchPresentation = boolean("requiresSearchPresentation"),
         )
         RegistrationKind.SEARCH_PROVIDER -> RawSpecificDescriptor.SearchProvider(
             resultKinds = enumNames("resultKinds"),
