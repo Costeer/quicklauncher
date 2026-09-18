@@ -10,6 +10,7 @@ Phase 9 repository work is implemented; its final local, visual, dependency, lic
 - Final API 35 source fingerprint: `7912ef41bc5ae2a6fffb9150ca9075aedc16b53540bb59c7b724612758ae8287` for the passing connected matrix, benchmark run, and exact restoration.
 - Final post-API 35 repository-gate fingerprint: `f8a76ee4c87da5749f52f9fc93cb262cb9434358e81c8e97d9433e71840fa97f` for the passing aggregate, visual, license, and non-Gradle gates. This is distinct from the device source fingerprint above.
 - Final documentation-inclusive review fingerprint: `6b1337cd066ca29925563bc02b571a85afb8062eb426a9ed4767e0510577bd88`. Specification passed with zero findings; documented standards passed with zero violations and three medium advisory smells. Reports: `/tmp/quicklauncher-phase9-final-review-api35/spec.md` and `/tmp/quicklauncher-phase9-final-review-api35/standards.md`.
+- Reviewed release commit: `eaf6af3503b30254e8a5917c579b83620ed8d6e4`. Unsigned annotated tag `v0.1.0` (tag object `0067b8ced201d172ebc211c093d2d1a967c8c93e`) peels to that exact commit; `origin/main` also matched at the pre-dispatch capture before later evidence-only documentation.
 - Worktree state is intentionally dirty. Preserve every tracked and untracked path, including `modules/layout/core/hs_err_pid51270.log`, `hs_err_pid276805.log`, and `hs_err_pid431514.log`.
 
 ## Acceptance state
@@ -57,8 +58,9 @@ Phase 9 repository work is implemented; its final local, visual, dependency, lic
 
 ## Remaining actions
 
-1. The protected real-draft run is authorized but cannot yet produce valid evidence: the candidate is dirty and uncommitted, absent from the remote, the remote has zero tags, `gh` is unauthenticated, and the protected environment, secrets, public certificate variable, and reviewer configuration cannot be inspected. No external or source-control mutation was performed. Preflight evidence: `/tmp/quicklauncher-phase9-protected-draft-preflight/report.md`.
-2. Once those prerequisites exist, run the protected stable or preview workflow at a matching immutable tag, download only the expected APK/checksum/metadata assets, and run the independent verifier plus GitHub attestation verification. Keep the release a draft until the exit condition is reviewed.
+1. The source-control and authentication prerequisites are closed: remote stable tag `v0.1.0` matches candidate commit `eaf6af3503b30254e8a5917c579b83620ed8d6e4`, and `gh` is authenticated as `Costeer`.
+2. The protected real-draft run remains blocked. Creating `release-stable` with required reviewer `Costeer` returned HTTP 422 because the current billing capability does not support the required-reviewer rule for this private repository. The resulting environment is empty and unprotected; all four stable signing secret names and `QUICKLAUNCHER_STABLE_CERT_SHA256` are absent. It must not be used as protected evidence. Evidence: `/tmp/quicklauncher-phase9-stable-pre-dispatch/`.
+3. After the plan/repository configuration supports the mandated reviewer and the owner provisions the existing stable signing identity plus independently trusted certificate variable, dispatch `release-stable.yml` at ref and input `v0.1.0`, download only the expected APK/checksum/metadata assets, and run the independent verifier plus GitHub attestation verification. Keep the release a draft until the exit condition is reviewed.
 
 ## Local reproduction
 

@@ -163,14 +163,14 @@ Status: local/dummy verification complete; protected real draft is authorized bu
   - `tools/release/test_release_tools.py`
   - `tools/release/fixtures/github-attestation-verification.json`
   - `tools/release/__init__.py`
-- Excluded work: disposable recovery is P9-03B. Production signing/tag/draft/publishing remains blocked until the uncommitted candidate, absent remote tag, unauthenticated `gh`, protected environment/secrets/certificate/reviewer visibility, and source-control mutation authority are resolved.
+- Excluded work: disposable recovery is P9-03B. Candidate commit `eaf6af3503b30254e8a5917c579b83620ed8d6e4`, remote stable tag `v0.1.0`, and authenticated `gh` now satisfy the source-control prerequisites. Production signing/draft evidence remains blocked until the repository plan supports the mandated required-reviewer protection and the owner provisions the existing stable secrets plus independently trusted certificate variable. Publication remains excluded.
 - Focused checks:
   - `env PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -v -s tools/release -p 'test*.py'`
   - `env PYTHONDONTWRITEBYTECODE=1 python3 tools/release/validate_channels.py && env PYTHONDONTWRITEBYTECODE=1 python3 tools/release/validate_workflows.py`
   - `env PYTHONDONTWRITEBYTECODE=1 python3 tools/release/dummy_release_drill.py --unsigned-apk app/build/outputs/apk/stable/release/app-stable-release-unsigned.apk --channel stable --aapt /home/costeer/.cache/quicklauncher-android-sdk/build-tools/35.0.0/aapt --apksigner /home/costeer/.cache/quicklauncher-android-sdk/build-tools/35.0.0/apksigner --zipalign /home/costeer/.cache/quicklauncher-android-sdk/build-tools/35.0.0/zipalign --keytool /home/costeer/.nix-profile/bin/keytool`
   - `env PYTHONDONTWRITEBYTECODE=1 python3 tools/release/dummy_release_drill.py --unsigned-apk app/build/outputs/apk/preview/release/app-preview-release-unsigned.apk --channel preview --aapt /home/costeer/.cache/quicklauncher-android-sdk/build-tools/35.0.0/aapt --apksigner /home/costeer/.cache/quicklauncher-android-sdk/build-tools/35.0.0/apksigner --zipalign /home/costeer/.cache/quicklauncher-android-sdk/build-tools/35.0.0/zipalign --keytool /home/costeer/.nix-profile/bin/keytool`
   - `nix shell nixpkgs#actionlint -c actionlint .github/workflows/ci.yml .github/workflows/release-stable.yml .github/workflows/release-preview.yml`
-- Evidence output: `/tmp/quicklauncher-phase9-p9-03/`, `/tmp/quicklauncher-phase9-final-gates-final2/non-gradle-final/`, and `/tmp/quicklauncher-phase9-protected-draft-preflight/report.md`.
+- Evidence output: `/tmp/quicklauncher-phase9-p9-03/`, `/tmp/quicklauncher-phase9-final-gates-final2/non-gradle-final/`, `/tmp/quicklauncher-phase9-protected-draft-preflight/report.md`, and `/tmp/quicklauncher-phase9-stable-pre-dispatch/`.
 
 ## P9-03B: disposable signing-key recovery
 
