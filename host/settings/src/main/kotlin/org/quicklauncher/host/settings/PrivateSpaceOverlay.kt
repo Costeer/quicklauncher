@@ -18,6 +18,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -40,6 +41,7 @@ fun PrivateSpaceOverlay(
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val largeText = LocalDensity.current.fontScale > 1f
     DisposableEffect(protection) {
         val session = protection.begin()
         onDispose(session::close)
@@ -55,10 +57,12 @@ fun PrivateSpaceOverlay(
                     )
                 },
                 actions = {
-                    TextButton(onClick = onOpenSettings) {
-                        Text(stringResource(R.string.private_space_settings))
+                    if (!largeText) {
+                        TextButton(onClick = onOpenSettings) {
+                            Text(stringResource(R.string.private_space_settings))
+                        }
+                        TextButton(onClick = onClose) { Text(stringResource(R.string.close)) }
                     }
-                    TextButton(onClick = onClose) { Text(stringResource(R.string.close)) }
                 },
             )
         },
@@ -67,19 +71,48 @@ fun PrivateSpaceOverlay(
             .fillMaxSize()
             .padding(padding)
             .padding(16.dp)
-        when {
-            state.transition == ProfileTransition.LOCKING ->
-                Explanation(stringResource(R.string.private_space_locking), contentModifier)
-            state.transition == ProfileTransition.UNLOCKING ->
-                Explanation(stringResource(R.string.private_space_unlocking), contentModifier)
-            state.availability == ProfileAvailability.LOCKED -> LockedPrivateSpace(
-                onUnlock = onUnlock,
-                modifier = contentModifier,
-            )
-            state.availability != ProfileAvailability.AVAILABLE ->
-                Explanation(stringResource(R.string.private_space_unavailable), contentModifier)
-            else -> UnlockedPrivateSpace(state, onLock, onLaunch, contentModifier)
+        if (largeText) {
+            Column(contentModifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onOpenSettings, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.private_space_settings))
+                }
+                TextButton(onClick = onClose, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.close))
+                }
+                PrivateSpaceContent(
+                    state,
+                    onLock,
+                    onUnlock,
+                    onLaunch,
+                    Modifier.fillMaxWidth().weight(1f),
+                )
+            }
+        } else {
+            PrivateSpaceContent(state, onLock, onUnlock, onLaunch, contentModifier)
         }
+    }
+}
+
+@Composable
+private fun PrivateSpaceContent(
+    state: PrivateSpaceState,
+    onLock: () -> Unit,
+    onUnlock: () -> Unit,
+    onLaunch: (AppActivityIdentity) -> Unit,
+    modifier: Modifier,
+) {
+    when {
+        state.transition == ProfileTransition.LOCKING ->
+            Explanation(stringResource(R.string.private_space_locking), modifier)
+        state.transition == ProfileTransition.UNLOCKING ->
+            Explanation(stringResource(R.string.private_space_unlocking), modifier)
+        state.availability == ProfileAvailability.LOCKED -> LockedPrivateSpace(
+            onUnlock = onUnlock,
+            modifier = modifier,
+        )
+        state.availability != ProfileAvailability.AVAILABLE ->
+            Explanation(stringResource(R.string.private_space_unavailable), modifier)
+        else -> UnlockedPrivateSpace(state, onLock, onLaunch, modifier)
     }
 }
 

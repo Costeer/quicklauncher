@@ -3,7 +3,11 @@ package org.quicklauncher.host.backup.library
 import java.security.MessageDigest
 import java.util.LinkedHashMap
 import java.util.concurrent.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
@@ -36,6 +40,28 @@ class PortableBackupLibraryTest {
                 assets = false,
             )
         }
+    }
+
+    @Test
+    fun `auxiliary requests defensively snapshot sections and extension bytes`() {
+        val section = PortableBackupSection(PortableBackupSectionType.ASSET, "image.fixture", byteArrayOf(1))
+        val sections = mutableListOf(section)
+        val extensionBytes = byteArrayOf(2, 3)
+        val extensions = mutableMapOf("future.record" to extensionBytes)
+        val imported = snapshot("Imported")
+        val validation = RestoreAuxiliaryValidationRequest(imported, sections, extensions)
+        val staging = RestoreAuxiliaryStageRequest(imported, sections, RestoreSelection(), extensions)
+
+        sections.clear()
+        extensionBytes.fill(9)
+        extensions.clear()
+        val validationCopy = requireNotNull(validation.launcherExtensionsCopy()["future.record"])
+        validationCopy.fill(8)
+
+        assertEquals(listOf(section), validation.sections)
+        assertArrayEquals(byteArrayOf(2, 3), validation.launcherExtensionsCopy()["future.record"])
+        assertEquals(listOf(section), staging.sections)
+        assertArrayEquals(byteArrayOf(2, 3), staging.launcherExtensionsCopy()["future.record"])
     }
 
     @Test
@@ -161,12 +187,9 @@ class PortableBackupLibraryTest {
             InMemoryLauncherStore(snapshot("Current")),
             { true },
             auxiliaryPort = object : RestoreAuxiliaryPort {
-                override fun validate(
-                    snapshot: LauncherSnapshot,
-                    sections: List<PortableBackupSection>,
-                ): Boolean = false
+                override fun validate(request: RestoreAuxiliaryValidationRequest): Boolean = false
 
-                override suspend fun stage(sections: List<PortableBackupSection>): AuxiliaryStage {
+                override suspend fun stage(request: RestoreAuxiliaryStageRequest): AuxiliaryStage {
                     staged = true
                     error("validation must finish before staging")
                 }
@@ -196,29 +219,28 @@ class PortableBackupLibraryTest {
         val document = source.createManual().completed()
         var validated: ByteArray? = null
         var restored: ByteArray? = null
+        var validationSnapshot: LauncherSnapshot? = null
+        var validationSections: List<PortableBackupSection>? = null
+        var stagingSnapshot: LauncherSnapshot? = null
+        var stagingSections: List<PortableBackupSection>? = null
+        var stagingSelection: RestoreSelection? = null
         val target = PortableBackupLibrary(
             folder,
             InMemoryLauncherStore(snapshot("Current")),
             { true },
             auxiliaryPort = object : RestoreAuxiliaryPort {
-                override fun validate(
-                    snapshot: LauncherSnapshot,
-                    sections: List<PortableBackupSection>,
-                    launcherExtensions: Map<String, ByteArray>,
-                ): Boolean {
-                    validated = launcherExtensions["future.record"]?.copyOf()
+                override fun validate(request: RestoreAuxiliaryValidationRequest): Boolean {
+                    validationSnapshot = request.snapshot
+                    validationSections = request.sections
+                    validated = request.launcherExtensionsCopy()["future.record"]
                     return true
                 }
 
-                override suspend fun stage(sections: List<PortableBackupSection>): AuxiliaryStage =
-                    error("selection-aware staging is required")
-
-                override suspend fun stage(
-                    sections: List<PortableBackupSection>,
-                    selection: RestoreSelection,
-                    launcherExtensions: Map<String, ByteArray>,
-                ): AuxiliaryStage {
-                    restored = launcherExtensions["future.record"]?.copyOf()
+                override suspend fun stage(request: RestoreAuxiliaryStageRequest): AuxiliaryStage {
+                    stagingSnapshot = request.snapshot
+                    stagingSections = request.sections
+                    stagingSelection = request.selection
+                    restored = request.launcherExtensionsCopy()["future.record"]
                     return object : AuxiliaryStage {
                         override suspend fun commit() = Unit
                         override suspend fun discard() = Unit
@@ -227,11 +249,22 @@ class PortableBackupLibraryTest {
             },
         )
 
+        val selection = RestoreSelection(
+            launcherMap = true,
+            themes = false,
+            webAdapters = false,
+            assets = true,
+        )
         val staged = target.preview(document.id).completed()
-        target.restore(staged).completed()
+        target.restore(staged, selection).completed()
 
         assertArrayEquals(byteArrayOf(4, 5, 6), validated)
         assertArrayEquals(byteArrayOf(4, 5, 6), restored)
+        assertEquals("Backup", validationSnapshot?.destinations?.single()?.name)
+        assertEquals(listOf(PortableBackupSectionType.LAUNCHER_MAP), validationSections?.map { it.type })
+        assertEquals("Backup", stagingSnapshot?.destinations?.single()?.name)
+        assertTrue(stagingSections?.isEmpty() == true)
+        assertEquals(selection, stagingSelection)
     }
 
     @Test
@@ -396,7 +429,9 @@ class PortableBackupLibraryTest {
         var committed = false
         var discarded = false
         val auxiliary = object : RestoreAuxiliaryPort {
-            override suspend fun stage(sections: List<org.quicklauncher.host.backup.archive.PortableBackupSection>) =
+            override fun validate(request: RestoreAuxiliaryValidationRequest): Boolean = true
+
+            override suspend fun stage(request: RestoreAuxiliaryStageRequest) =
                 object : AuxiliaryStage {
                     override suspend fun commit() { committed = true }
                     override suspend fun discard() { discarded = true }
@@ -437,6 +472,41 @@ class PortableBackupLibraryTest {
         val before = targetStore.read()
 
         val failure = runCatching { library.restore(staged) }.exceptionOrNull()
+
+        assertTrue(failure is CancellationException)
+        assertTrue(discarded)
+        assertSame(before, targetStore.read())
+    }
+
+    @Test
+    fun `cancellation observed after staging discards staged assets`() = runTest {
+        val folder = MemoryFolder()
+        val source = PortableBackupLibrary(folder, InMemoryLauncherStore(snapshot("Backup")), { true })
+        val document = source.createManual().completed()
+        val targetStore = InMemoryLauncherStore(snapshot("Current"))
+        var discarded = false
+        val library = PortableBackupLibrary(
+            folder,
+            targetStore,
+            { true },
+            auxiliaryPort = object : RestoreAuxiliaryPort {
+                override fun validate(request: RestoreAuxiliaryValidationRequest): Boolean = true
+
+                override suspend fun stage(request: RestoreAuxiliaryStageRequest): AuxiliaryStage {
+                    currentCoroutineContext().cancel(CancellationException("injected after staging"))
+                    return object : AuxiliaryStage {
+                        override suspend fun commit() = Unit
+                        override suspend fun discard() { discarded = true }
+                    }
+                }
+            },
+        )
+        val staged = library.preview(document.id).completed()
+        val before = targetStore.read()
+
+        val failure = runCatching {
+            withContext(Job()) { library.restore(staged) }
+        }.exceptionOrNull()
 
         assertTrue(failure is CancellationException)
         assertTrue(discarded)
@@ -507,12 +577,13 @@ class PortableBackupLibraryTest {
         commit: suspend () -> Unit,
         discard: suspend () -> Unit,
     ): RestoreAuxiliaryPort = object : RestoreAuxiliaryPort {
-        override suspend fun stage(
-            sections: List<org.quicklauncher.host.backup.archive.PortableBackupSection>,
-        ): AuxiliaryStage = object : AuxiliaryStage {
-            override suspend fun commit() = commit.invoke()
-            override suspend fun discard() = discard.invoke()
-        }
+        override fun validate(request: RestoreAuxiliaryValidationRequest): Boolean = true
+
+        override suspend fun stage(request: RestoreAuxiliaryStageRequest): AuxiliaryStage =
+            object : AuxiliaryStage {
+                override suspend fun commit() = commit.invoke()
+                override suspend fun discard() = discard.invoke()
+            }
     }
 
     private suspend fun libraryWithSections(

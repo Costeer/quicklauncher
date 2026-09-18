@@ -1,6 +1,6 @@
 # Current implementation status
 
-Reviewed on 2026-09-17. Phases 0 through 7 are complete after independent Phase 7 repairs. Phase 8 is in progress with the published deterministic archive envelope implemented in `:host:backup`. The Phase 7 theme implementation has passed its local, visual, contract, dependency, privacy, Robolectric, and required API 35 AOSP gates. The GrapheneOS, real managed-profile, and physical-device restoration results below remain owner-supplied evidence reviewed, not independently rerun.
+Reviewed on 2026-09-18. Phases 0 through 8 are complete. Phase 9 release machinery is implemented, and its final repository gates, separate two-axis reviews, owner-authorized current GrapheneOS compatibility matrix, and pinned API 35 accessibility/performance matrix pass. `P9-RELEASE` still needs protected real-draft verification. Phase 8 closed at source fingerprint `65820aea82c057acf53678db1dbc5a5946eeba962f7df7d5ca653ae55d086656`. Earlier GrapheneOS and real managed-profile results below remain labeled as owner-supplied historical evidence; the new Phase 9 runs are recorded separately.
 
 The [visual current-state overview](current-state-overview.html) summarizes the architecture, capability status, verification results, device matrix, migration chain, and completed gates.
 
@@ -32,6 +32,8 @@ The [visual current-state overview](current-state-overview.html) summarizes the 
 - Automatic backup is one persisted charging-only job for the next local 03:00 boundary and may export only before 06:00. Completion, failure, interruption, or a late delivery schedules the next night. The stored enabled preference remains true only while the expected job exists or rescheduling succeeds.
 - Restore review validates current theme and destination asset references against canonical imported sections and an exact optional SHA-256 manifest. Themes and assets are one selection; destination-map and web-adapter data remain separately selectable. Opaque launcher extensions and web-adapter entries persist across restore, process recreation, and later export without execution. Rejected or cancelled work rolls back auxiliary data, and theme reconciliation removes an interrupted private staging directory.
 - Post-restore Settings actions open document authorization, app permission Settings, widget rebinding, quarantine review, and profile review. Recovery counts survive Activity recreation through saved instance state. A pending restore preview expires on recreation and must be created again. Support diagnostics use a bounded typed private log and clear only the exported prefix after a successful export.
+- Android SAF, persisted-grant, and job-scheduler adapters live in `:host:platform`; `:host:backup` retains only the pure nightly wall-clock policy. Composite auxiliary staging cleans up already acquired stages after a later acquisition failure or post-stage cancellation, and asset reconciliation keys cleanup by exact kind plus stable ID.
+- Phase 9 adds an isolated release-mode macrobenchmark boundary, fail-closed thresholds and result metadata checks, exact security/privacy audits, separate protected stable/preview draft workflows, independent checksum/certificate/provenance verification, Obtainium channel metadata, disposable-key recovery, and user-facing installation and recovery guidance. The pinned API 35 benchmark now supplies real measurements; it does not claim a production-signed artifact.
 
 The authoritative contribution rules are in [the contract index](../contracts/README.md). Architecture boundaries and sequencing are in [the architecture plan](../architecture/launcher-architecture-plan.md). The accepted theme delivery boundary is in [the Phase 7 theme scope](phase-7-theme-scope.md). Current Android behavior research is in the [Phase 5 platform note](../research/phase-5-android-platform-behavior.md) and [Phase 6 search platform note](../research/phase-6-search-platform-behavior.md).
 
@@ -64,44 +66,76 @@ The completed evidence record is [Phase 5 device evidence](phase-5-device-eviden
 - The final pinned API 35 AOSP matrix passed 69 tests: 66 passed, 3 explicit authority-dependent skips, 0 failures, and 0 errors. Phase 7 synthetic font/image, revoked access, icon-pack, displayed preview, stale-command, and cleanup cases passed. Exact emulator restoration was confirmed before shutdown.
 - GrapheneOS was excluded as directed. Its existing results are owner-supplied evidence reviewed, not independently rerun; the exclusion is neither a failure nor an independent pass.
 
+## Phase 8 gate status
+
+- The complete implementation and command ledger are in [Phase 8 backup evidence](phase-8-backup-evidence.md). The final full local gate passed 3,831 actionable tasks and 713 tests with no failures, errors, or skips.
+- The final six-module no-record Paparazzi gate passed 334 tests. The four backup-review baselines were inspected for hierarchy, contrast, wrapping, clipping, and visibility of all review categories plus restore/cancel actions at normal and 2x text.
+- All 23 CI-declared license entry tasks expanded to 38 passing actionable tasks; `actionlint`, whitespace, repository/privacy/release, boundary, and backup-rule audits passed.
+- The final pinned API 35 AOSP matrix passed 78 tests: 75 passed, 3 explicit capability skips, and 0 failures/errors. The exact baseline state was restored, the normalized semantic diff was empty, and the emulator stopped with snapshots disabled.
+- Final spec review found no issues. Final standards review found no documented-standard violations; two medium divergent-responsibility smells and one low internal restore-port surface smell remain non-blocking follow-up.
+- No GrapheneOS device was queried or used for Phase 8. Existing GrapheneOS results remain owner-supplied only.
+
+## Phase 9 gate status
+
+- The authoritative implementation, command, failure, repair, and open-prerequisite ledger is [Phase 9 release evidence](phase-9-release-evidence.md); bounded packet status is in [Phase 9 packets](phase-9-packets.md).
+- The complete post-API 35 gate passes `build`, module boundaries, no-Google policy, dependency health, and `checkPhase9Performance` in 68s with 4,038 actionable tasks on repository-gate fingerprint `f8a76ee4c87da5749f52f9fc93cb262cb9434358e81c8e97d9433e71840fa97f`. The final six-module no-record Paparazzi rerun passes 365 tests in 21s with zero mismatches, and all 146 repository PNG hashes remain unchanged. Earlier fully executed candidates `33e764da0583059d07ca21906d824964a0b988aa9a39f4193e0015cbcf8d5eac` and `24c17342eba1277a137c91c63f1aea322cffb05fea6e21b1abe2cdbdbc5be679` remain historical evidence.
+- Exact security/privacy tooling passes 20 tests and canonical stable/preview manifest audits. Release tooling passes 38 tests, stable/preview dummy artifact drills, workflow/channel validation, three-workflow `actionlint`, and disposable two-backup/v3-lineage recovery.
+- The restore auxiliary interface was deepened to two explicit immutable request methods, and `ProductionSelectedLayoutShell` was extracted as the exact bounded production seam for shell visual and compiled focus/key tests. `MainActivity`, `AndroidThemeAssetStore`, and duplicated stable/preview workflow structure remain justified follow-up smells because splitting them now would not create a deeper release-safety boundary.
+- On final API 35 source fingerprint `7912ef41bc5ae2a6fffb9150ca9075aedc16b53540bb59c7b724612758ae8287`, the connected accessibility matrix passed 80 of 83 tests with three expected skips and no failures, and all five benchmark scenarios plus all six thresholds passed. The current GrapheneOS compatibility portion is also closed by the authorized Phase 9 run.
+- Accessibility repairs include a debug-only Compose test activity excluded from release variants, explicit shell focus order, deterministic keyboard input mode, and cold-start onboarding-state synchronization. Benchmark/release repairs include signing and emulator acknowledgement, permission and selector corrections, and R8 plus resource shrinking from 34.7MB to 5.78MB with narrow KSP/protobuf rules.
+- Dependency health identified the Compose test manifest as an implementation dependency; moving it from `debugImplementation` to `debugRuntimeOnly` preserved the debug-only test activity and restored the intended dependency graph. The full affected aggregate then passed.
+- No tag, release, production signature, publication, production-key access, or real downloaded-draft verification was performed. The authorized protected-draft run remains blocked by the dirty uncommitted candidate being absent remotely, zero remote tags, unauthenticated `gh`, and uninspectable protected environment/secrets/certificate/reviewer configuration.
+- The final specification and documented-standards reviews pass on documentation-inclusive fingerprint `6b1337cd066ca29925563bc02b571a85afb8062eb426a9ed4767e0510577bd88`: zero specification findings and zero documented-standard violations. The standards report retains three medium advisory smells. Reports: `/tmp/quicklauncher-phase9-final-review-api35/spec.md` and `standards.md`.
+
 ## Last verified local gates
 
 ```bash
-./gradlew build checkModuleBoundaries verifyNoGoogleDependencies buildHealth \
-  --no-daemon --no-configuration-cache --console=plain
+GRADLE_USER_HOME=/tmp/quicklauncher-phase9-gradle-home \
+  tools/gradle --summary \
+  --project-cache-dir /tmp/quicklauncher-phase9-project-cache \
+  build checkModuleBoundaries verifyNoGoogleDependencies buildHealth checkPhase9Performance \
+  --max-workers=1 --no-daemon --no-configuration-cache --console=plain
 ```
 
-The final Phase 7 code passed the independent exact rerun in 5m25s: 3,807 actionable tasks (711 executed, 40 from cache, and 3,056 up-to-date). This includes debug and release unit tests, Android lint, license checks, registry/contract suites, module-boundary validation, Google dependency rejection, and dependency health. The subsequently added Phase 8 archive slice has its own focused unit/lint and dependency-health results in [the Phase 8 scope](phase-8-backup-scope.md).
+On this host the successful Phase 9 runs used isolated user/project caches because a preserved failed JVM remains recorded in old Gradle locks. The final post-API 35 aggregate passed in 68s with 4,038 actionable tasks at repository-gate fingerprint `f8a76ee4c87da5749f52f9fc93cb262cb9434358e81c8e97d9433e71840fa97f`. Earlier diagnosed JVM, lint, compilation, and dependency failures remain preserved rather than overwritten. Full final evidence: `/tmp/quicklauncher-phase9-final-gates-api35/`.
 
 ```bash
-./gradlew \
+GRADLE_USER_HOME=/tmp/quicklauncher-phase9-gradle-home \
+tools/gradle --summary \
+  --project-cache-dir /tmp/quicklauncher-phase9-project-cache \
   :app:verifyPaparazziStableDebug \
   :modules:block:core:verifyPaparazziDebug \
   :modules:layout:core:verifyPaparazziDebug \
   :host:editor:verifyPaparazziDebug \
   :host:runtime:verifyPaparazziDebug \
   :host:settings:verifyPaparazziDebug \
-  --no-daemon --no-configuration-cache --console=plain
+  --max-workers=1 --no-daemon --no-configuration-cache --console=plain
 ```
 
-Passed on the current code in 1m 56s: 285 actionable tasks (6 executed and 279 up-to-date), covering 299 passing tests. The 130 inspected baselines include nine new theme-profile, manual-palette, and wallpaper states at normal and large text plus the earlier search, widget, folder, item-action, Private Space, and recovery scenarios.
+Passed on repository-gate fingerprint `f8a76ee4c87da5749f52f9fc93cb262cb9434358e81c8e97d9433e71840fa97f` in 21s, covering 365 tests without record mode or image mismatch. All 146 repository PNGs retained identical SHA-256 hashes. Full evidence: `/tmp/quicklauncher-phase9-final-gates-api35/`.
 
 ```bash
-nix shell nixpkgs#actionlint -c actionlint .github/workflows/ci.yml
+nix shell nixpkgs#actionlint -c actionlint .github/workflows/ci.yml \
+  .github/workflows/release-stable.yml .github/workflows/release-preview.yml
 git diff --check
-adb devices -l
 ```
 
-The final `actionlint` rerun passed in 1.42s and `git diff --check` passed in under 0.1s on the current worktree. The later API 35 run was pinned to `emulator-5554`; the excluded physical device was not queried or changed.
+The final post-API 35 non-Gradle suite passed on repository-gate fingerprint `f8a76ee4c87da5749f52f9fc93cb262cb9434358e81c8e97d9433e71840fa97f` in about 9s: 20 security tests, 38 release tests, 32 performance-verifier tests, canonical audits, channel/workflow validators, three-workflow `actionlint`, disposable-key recovery, stable/preview generated-key dummy drills, documentation coherence, and `git diff --check`. Full evidence: `/tmp/quicklauncher-phase9-final-gates-api35/`. That run did not query or change a device.
 
-Every `licensee` task named by CI also passed explicitly in 12 seconds: 23 declared tasks expanded to 38 actionable tasks, all up-to-date. The command derives the exact task set maintained by CI:
+Every `licensee` task named by CI plus the benchmark exact-graph audit passed explicitly in 13 seconds, and all 51 exact dependencies had approved SPDX licenses. The command derives the maintained task set and adds the benchmark module's compatible audit; complete evidence is retained in `/tmp/quicklauncher-phase9-final-gates-api35/`:
 
 ```bash
-rg -o ':[A-Za-z0-9:_-]+:licensee' .github/workflows/ci.yml | sort -u | \
-  xargs ./gradlew --no-daemon --no-configuration-cache --console=plain
+(rg -o ':[A-Za-z0-9:_-]+:licensee' .github/workflows/ci.yml; \
+  printf '%s\n' ':benchmark:macrobenchmark:checkBenchmarkDependencyLicenses') | \
+  sort -u | GRADLE_USER_HOME=/tmp/quicklauncher-phase9-gradle-home \
+  xargs tools/gradle --summary \
+    --project-cache-dir /tmp/quicklauncher-phase9-project-cache \
+    --max-workers=1 --no-daemon --no-configuration-cache --console=plain
 ```
 
-The independent current-worktree connected command passed on the full API 35 AOSP phone image in 3m26s (390 actionable tasks: 5 executed, 385 up-to-date): 69 tests, 66 passed, 3 skipped, and 0 failed or errored. The image was `Android/sdk_phone64_x86_64/emu64x:15/AE3A.240806.019/12368160:userdebug/test-keys`, build `AE3A.240806.019`. The skips were shortcut-host success and the two explicitly gated managed-profile cases. The original `com.android.launcher3` Home holder, Settings values, wallpaper names, and pre-existing empty notification-listener key/value were restored; only the Owner user remained, there was no device owner, and no Quicklauncher package, grant, widget, provider reference, or synthetic test file remained before the emulator stopped with snapshots disabled.
+The latest connected evidence is the owner-authorized Phase 9 GrapheneOS Pixel 10a (`stallion`) run on Android 17/API 37, build `2026091001`, patch `2026-09-01`. On candidate `9d013c4b8b79b227243f67aa38efb50dcdff90b6783decc9714247b3dd28289d`, the focused repaired app-recovery route passed 1/1 in 40s, then the exact five-module matrix passed in 213s (Gradle 3m31s, 410 actionable tasks): 68 tests, 65 passed, three expected skips, zero failures/errors. Data passed 17/17; platform passed 19 with one shortcut-authority skip; runtime/editor were SDK-suppressed on API 37; app passed 29 with two managed-work skips. The initial failure and repeated focused reruns diagnosed an instrumentation targeting defect around a non-clickable Compose child and virtualized list; the final harness scrolls to the exact visible Quicklauncher label, activates it through normal UI Automator hit testing, and retains the production entry assertion. Baseline/postflight comparison found no release-relevant semantic change and no Quicklauncher package, widget, grant, or job residue; volatile whole-service dump hashes remain advisory. Evidence: `/tmp/quicklauncher-phase9-grapheneos-physical/`.
+
+The latest connected API 35 evidence is the owner-authorized Phase 9 AOSP run on source fingerprint `7912ef41bc5ae2a6fffb9150ca9075aedc16b53540bb59c7b724612758ae8287`. The matrix passed in 129s: 83 tests, 80 passed, three expected skips, and zero failures/errors. Evidence: `/tmp/quicklauncher-phase9-api35-authorized/connected-final3/`. The five-scenario benchmark passed in 329s at thermal status `NONE` and `60.000004Hz`; all six thresholds passed: Home startup `830.310ms`, spatial-navigation CPU `22.196ms`, frame overrun `5.845ms`, catalog browse `84.749ms`, search first result `251.307ms`, and memory `253.062MiB`. It measured the exact installed `org.quicklauncher` version `0.1.0`/code `1` APK with SHA-256 `ab1634d54b5f258d61a6b8a94f805d053910d63a02105c31bdf705f1744f5f49` and certificate SHA-256 `9be4fbc5c7311b023c58a1d0ffa105b30503805471948122b901796f71c15940`. Evidence: `/tmp/quicklauncher-phase9-api35-authorized/benchmark/run7/`. Restoration was an exact semantic match; the emulator was killed without snapshot save and confirmed offline. Evidence: `/tmp/quicklauncher-phase9-api35-authorized/restoration/` and `/tmp/quicklauncher-phase9-api35-authorized/shutdown/`.
 
 The connected command passed on the supplemental Android 16/API 36 device in 2m34s (384 actionable tasks: 5 executed, 379 up-to-date):
 
@@ -119,11 +153,11 @@ It ran 45 tests: 43 passed, 2 unsupported authority-dependent paths skipped, and
 
 ## Deliberate limits
 
-- Search web behavior intentionally opens validated external HTTPS destinations; it does not retrieve remote result data. Restored portable web-adapter records stay inert. Phase 8 now has typed payloads and fixtures, SAF folder access, manual backups, one-shot 03:00 through 06:00 local charging-only automatic backups, encryption, staged category restore, asset-reference and optional-manifest validation, recovery actions, support bundles, and inspected large-text restore actions. It is still in progress. Final gates, API 35 evidence, macrobenchmark thresholds, and publication remain open. Phase 7 supports the documented Nova/ADW declarative subset only; other icon-pack dialects remain out of scope.
+- Search web behavior intentionally opens validated external HTTPS destinations; it does not retrieve remote result data. Restored portable web-adapter records stay inert. Phase 8 has no macrobenchmark task or result. Phase 9's benchmark result is only the authorized pinned API 35 evidence recorded above. Phase 7 supports the documented Nova/ADW declarative subset only; other icon-pack dialects remain out of scope.
 - Private Space hidden-profile access is limited to the complete host-owned secure container and typed system routes described above; private content remains suppressed on every unresolved or policy-ambiguous path.
 - Destructive item actions remain fail-closed whenever the platform cannot prove current eligibility; supported uninstall and disable routes are exposed only after that proof and require confirmation.
-- No APK was published, no release was created, and signing infrastructure was not changed.
+- Release workflows, verification tooling, and channel metadata were added, but no APK was published, no release was created, no production APK was signed, and no production signing material was accessed or reconstructed.
 
 ## Next slice
 
-Continue Phase 8 with the final local, release, lint, visual, license, workflow, diff, and pinned API 35 AOSP gates. Capture the final fingerprint first, restore the emulator exactly, and stop it without saving a snapshot. Do not treat the focused passes as Phase 8 completion evidence.
+The pinned API 35 accessibility and benchmark matrix, final post-API 35 repository gates, and separate final two-axis reviews are complete. The protected matching-tag draft workflow is authorized but concretely blocked: the dirty uncommitted candidate is absent from the remote, the remote has zero tags, `gh` is unauthenticated, and protected environment/secrets/public-certificate/reviewer configuration is uninspectable. No external or source-control mutation occurred; see `/tmp/quicklauncher-phase9-protected-draft-preflight/report.md`. Once those prerequisites exist, verify the downloaded artifact's tag/commit, channel application ID, version, minimum SDK, v3 signature, trusted certificate, checksum, and attested provenance.

@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "repository": "Costeer/quicklauncher",
+  "obtainiumSourceContract": ".github/release/obtainium-source-contract.json",
+  "officialSources": [
+    {
+      "commit": "af286fa8d31d7406d6db167e2314d376d74f7696",
+      "url": "https://github.com/ImranR98/Obtainium/blob/af286fa8d31d7406d6db167e2314d376d74f7696/lib/app_sources/github.dart"
+    },
+    {
+      "commit": "2a62ed9288f9efe8e888f27be11d9f88e21df7a1",
+      "url": "https://github.com/ImranR98/apps.obtainium.imranr.dev/blob/2a62ed9288f9efe8e888f27be11d9f88e21df7a1/CONTRIBUTING.md"
+    },
+    {
+      "commit": "4cb6f4b1917790f10ec251867cc4ecb1ba383954",
+      "url": "https://github.com/github/docs/blob/4cb6f4b1917790f10ec251867cc4ecb1ba383954/content/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations.md"
+    }
+  ],
+  "channels": {
+    "stable": {
+      "applicationId": "org.quicklauncher",
+      "assetRegex": "^quicklauncher-stable-v[0-9]+\\.[0-9]+\\.[0-9]+-universal\\.apk$",
+      "certificateVariable": "QUICKLAUNCHER_STABLE_CERT_SHA256",
+      "environment": "release-stable",
+      "keySecretPrefix": "QUICKLAUNCHER_STABLE_",
+      "obtainium": ".github/release/obtainium-stable.json",
+      "releaseTitleRegex": "^Quicklauncher stable v[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "tagRegex": "^v[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "workflow": ".github/workflows/release-stable.yml"
+    },
+    "preview": {
+      "applicationId": "org.quicklauncher.preview",
+      "assetRegex": "^quicklauncher-preview-v[0-9]+\\.[0-9]+\\.[0-9]+-preview(?:\\.[0-9]+)?-universal\\.apk$",
+      "certificateVariable": "QUICKLAUNCHER_PREVIEW_CERT_SHA256",
+      "environment": "release-preview",
+      "keySecretPrefix": "QUICKLAUNCHER_PREVIEW_",
+      "obtainium": ".github/release/obtainium-preview.json",
+      "releaseTitleRegex": "^Quicklauncher preview v[0-9]+\\.[0-9]+\\.[0-9]+-preview(?:\\.[0-9]+)?$",
+      "tagRegex": "^v[0-9]+\\.[0-9]+\\.[0-9]+-preview(?:\\.[0-9]+)?$",
+      "workflow": ".github/workflows/release-preview.yml"
+    }
+  }
+}

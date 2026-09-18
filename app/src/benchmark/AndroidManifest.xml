@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <permission
+        android:name="org.quicklauncher.permission.CONTROL_BENCHMARK_FIXTURE"
+        android:protectionLevel="signature" />
+
+    <application>
+        <profileable
+            android:shell="true"
+            tools:targetApi="29" />
+
+        <receiver
+            android:name=".BenchmarkFixtureReceiver"
+            android:exported="true"
+            android:permission="org.quicklauncher.permission.CONTROL_BENCHMARK_FIXTURE">
+            <intent-filter>
+                <action android:name="org.quicklauncher.benchmark.SEED_FIVE_DESTINATIONS" />
+                <action android:name="org.quicklauncher.benchmark.RUN_CATALOG" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

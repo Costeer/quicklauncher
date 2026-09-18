@@ -2,13 +2,16 @@ package org.quicklauncher.app
 
 import android.content.Context
 import java.util.Base64
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import org.quicklauncher.host.backup.archive.PortableBackupSection
 import org.quicklauncher.host.backup.archive.PortableBackupSectionType
 import org.quicklauncher.host.backup.library.AuxiliaryStage
 import org.quicklauncher.host.backup.library.BackupLauncherExtensionSource
 import org.quicklauncher.host.backup.library.BackupSectionSource
 import org.quicklauncher.host.backup.library.RestoreAuxiliaryPort
-import org.quicklauncher.host.backup.library.RestoreSelection
+import org.quicklauncher.host.backup.library.RestoreAuxiliaryStageRequest
+import org.quicklauncher.host.backup.library.RestoreAuxiliaryValidationRequest
 import org.quicklauncher.host.backup.payload.SectionPayloadKind
 import org.quicklauncher.host.backup.payload.SectionPayloadResult
 import org.quicklauncher.host.backup.payload.VersionedSectionPayloadCodec
@@ -29,39 +32,20 @@ internal class CompositeBackupSectionSource(
 internal class CompositeRestoreAuxiliaryPort(
     private val ports: List<RestoreAuxiliaryPort>,
 ) : RestoreAuxiliaryPort {
-    override fun validate(snapshot: LauncherSnapshot, sections: List<PortableBackupSection>): Boolean =
-        ports.all { it.validate(snapshot, sections) }
+    override fun validate(request: RestoreAuxiliaryValidationRequest): Boolean =
+        ports.all { it.validate(request) }
 
-    override fun validate(
-        snapshot: LauncherSnapshot,
-        sections: List<PortableBackupSection>,
-        launcherExtensions: Map<String, ByteArray>,
-    ): Boolean = ports.all { it.validate(snapshot, sections, launcherExtensions) }
+    override suspend fun stage(request: RestoreAuxiliaryStageRequest): AuxiliaryStage =
+        acquireStages { it.stage(request) }
 
-    override suspend fun stage(sections: List<PortableBackupSection>): AuxiliaryStage =
-        stage(sections, RestoreSelection())
-
-    override suspend fun stage(
-        sections: List<PortableBackupSection>,
-        selection: RestoreSelection,
-    ): AuxiliaryStage = stage(sections, selection, emptyMap())
-
-    override suspend fun stage(
-        sections: List<PortableBackupSection>,
-        selection: RestoreSelection,
-        launcherExtensions: Map<String, ByteArray>,
-    ): AuxiliaryStage {
-        val stages = ports.map { it.stage(sections, selection, launcherExtensions) }
-        return compositeStage(stages)
-    }
-
-    override suspend fun stage(
-        snapshot: LauncherSnapshot,
-        sections: List<PortableBackupSection>,
-        selection: RestoreSelection,
-        launcherExtensions: Map<String, ByteArray>,
-    ): AuxiliaryStage {
-        val stages = ports.map { it.stage(snapshot, sections, selection, launcherExtensions) }
+    private suspend fun acquireStages(acquire: suspend (RestoreAuxiliaryPort) -> AuxiliaryStage): AuxiliaryStage {
+        val stages = mutableListOf<AuxiliaryStage>()
+        try {
+            ports.forEach { stages += acquire(it) }
+        } catch (failure: Throwable) {
+            discardStages(stages)
+            throw failure
+        }
         return compositeStage(stages)
     }
 
@@ -70,15 +54,19 @@ internal class CompositeRestoreAuxiliaryPort(
             override suspend fun commit() {
                 try {
                     stages.forEach { it.commit() }
-                } catch (failure: Exception) {
-                    stages.asReversed().forEach { runCatching { it.discard() } }
+                } catch (failure: Throwable) {
+                    discardStages(stages)
                     throw failure
                 }
             }
 
-            override suspend fun discard() {
-                stages.asReversed().forEach { it.discard() }
-            }
+            override suspend fun discard() = discardStages(stages)
+        }
+    }
+
+    private suspend fun discardStages(stages: List<AuxiliaryStage>) {
+        withContext(NonCancellable) {
+            stages.asReversed().forEach { runCatching { it.discard() } }
         }
     }
 }
@@ -117,20 +105,13 @@ internal class PersistedWebAdapterBackupPort(context: Context) :
             }.getOrElse { error("Stored launcher extension is corrupt") }
         }
 
-    override suspend fun stage(sections: List<PortableBackupSection>): AuxiliaryStage =
-        stage(sections, RestoreSelection())
+    override fun validate(request: RestoreAuxiliaryValidationRequest): Boolean = true
 
-    override suspend fun stage(
-        sections: List<PortableBackupSection>,
-        selection: RestoreSelection,
-    ): AuxiliaryStage = stage(sections, selection, emptyMap())
-
-    override suspend fun stage(
-        sections: List<PortableBackupSection>,
-        selection: RestoreSelection,
-        launcherExtensions: Map<String, ByteArray>,
-    ): AuxiliaryStage {
+    override suspend fun stage(request: RestoreAuxiliaryStageRequest): AuxiliaryStage {
+        val sections = request.sections
+        val selection = request.selection
         if (!selection.webAdapters && !selection.launcherMap) return NoOpAuxiliaryStage
+        val launcherExtensions = request.launcherExtensionsCopy()
         val payload = if (selection.webAdapters) {
             sections.singleOrNull { it.type == PortableBackupSectionType.WEB_ADAPTERS }
                 ?.also { check(it.name == SECTION_NAME) }

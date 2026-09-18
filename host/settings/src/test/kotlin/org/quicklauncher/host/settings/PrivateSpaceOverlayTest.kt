@@ -1,11 +1,22 @@
+@file:OptIn(androidx.compose.ui.test.ExperimentalTestApi::class)
+
 package org.quicklauncher.host.settings
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.unit.Density
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -130,6 +141,63 @@ class PrivateSpaceOverlayTest {
         assertEquals(1, locks)
         assertEquals(1, settings)
         assertEquals(1, closes)
+    }
+
+    @Test
+    fun `private overlay traverses top bar actions and activates close from D-pad`() {
+        var settings = 0
+        var closes = 0
+        compose.setContent {
+            MaterialTheme {
+                PrivateSpaceOverlay(
+                    state = state(ProfileAvailability.LOCKED, emptyList()),
+                    protection = RecordingProtection(),
+                    onLock = {},
+                    onUnlock = {},
+                    onLaunch = {},
+                    onOpenSettings = { settings += 1 },
+                    onClose = { closes += 1 },
+                )
+            }
+        }
+
+        compose.onNodeWithText("Private Space settings")
+            .performSemanticsAction(SemanticsActions.RequestFocus)
+            .assertIsFocused()
+            .performKeyInput { pressKey(Key.Tab) }
+        compose.onNodeWithText("Close")
+            .assertIsFocused()
+            .performKeyInput { pressKey(Key.DirectionCenter) }
+
+        assertEquals(0, settings)
+        assertEquals(1, closes)
+    }
+
+    @Test
+    fun `large text preserves heading and traverses settings then close`() {
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(density = 1f, fontScale = 2f)) {
+                MaterialTheme {
+                    PrivateSpaceOverlay(
+                        state = state(ProfileAvailability.LOCKED, emptyList()),
+                        protection = RecordingProtection(),
+                        onLock = {},
+                        onUnlock = {},
+                        onLaunch = {},
+                        onOpenSettings = {},
+                        onClose = {},
+                    )
+                }
+            }
+        }
+
+        compose.onNodeWithText("Private Space").assertIsDisplayed()
+        compose.onNodeWithText("Private Space settings")
+            .assertIsDisplayed()
+            .performSemanticsAction(SemanticsActions.RequestFocus)
+            .assertIsFocused()
+            .performKeyInput { pressKey(Key.Tab) }
+        compose.onNodeWithText("Close").assertIsDisplayed().assertIsFocused()
     }
 
     private class RecordingProtection : SecureOverlayProtection {

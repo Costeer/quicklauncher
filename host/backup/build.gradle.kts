@@ -8,8 +8,11 @@ plugins {
 description = "Backup archive, restore, and support bundle implementation."
 
 dependencies {
+    api(project(":contracts:domain"))
     api(project(":host:data"))
+    implementation(project(":contracts:contribution"))
     implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.serialization.core)
     implementation(libs.kotlinx.serialization.json)
 
     testImplementation(libs.junit)

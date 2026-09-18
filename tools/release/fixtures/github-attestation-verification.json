@@ -1,0 +1,75 @@
+[
+  {
+    "attestation": {
+      "bundle": {
+        "mediaType": "application/vnd.dev.sigstore.bundle.v0.3+json"
+      }
+    },
+    "verificationResult": {
+      "signature": {
+        "certificate": {
+          "issuer": "https://token.actions.githubusercontent.com",
+          "subjectAlternativeName": "https://github.com/Costeer/quicklauncher/.github/workflows/release-stable.yml@refs/tags/v1.2.3",
+          "buildSignerURI": "https://github.com/Costeer/quicklauncher/.github/workflows/release-stable.yml@refs/tags/v1.2.3",
+          "buildSignerDigest": "0123456789abcdef0123456789abcdef01234567",
+          "runnerEnvironment": "github-hosted",
+          "sourceRepositoryURI": "https://github.com/Costeer/quicklauncher",
+          "sourceRepositoryDigest": "0123456789abcdef0123456789abcdef01234567",
+          "sourceRepositoryRef": "refs/tags/v1.2.3"
+        }
+      },
+      "verifiedTimestamps": [
+        {
+          "type": "transparency-log",
+          "uri": "https://rekor.sigstore.dev"
+        }
+      ],
+      "statement": {
+        "_type": "https://in-toto.io/Statement/v1",
+        "predicateType": "https://slsa.dev/provenance/v1",
+        "subject": [
+          {
+            "name": "quicklauncher-stable-v1.2.3-universal.apk",
+            "digest": {
+              "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            }
+          }
+        ],
+        "predicate": {
+          "buildDefinition": {
+            "buildType": "https://actions.github.io/buildtypes/workflow/v1",
+            "externalParameters": {
+              "workflow": {
+                "ref": "refs/tags/v1.2.3",
+                "repository": "https://github.com/Costeer/quicklauncher",
+                "path": ".github/workflows/release-stable.yml"
+              }
+            },
+            "internalParameters": {
+              "github": {
+                "event_name": "workflow_dispatch",
+                "runner_environment": "github-hosted"
+              }
+            },
+            "resolvedDependencies": [
+              {
+                "uri": "git+https://github.com/Costeer/quicklauncher@refs/tags/v1.2.3",
+                "digest": {
+                  "gitCommit": "0123456789abcdef0123456789abcdef01234567"
+                }
+              }
+            ]
+          },
+          "runDetails": {
+            "builder": {
+              "id": "https://github.com/Costeer/quicklauncher/.github/workflows/release-stable.yml@refs/tags/v1.2.3"
+            },
+            "metadata": {
+              "invocationId": "https://github.com/Costeer/quicklauncher/actions/runs/123/attempts/1"
+            }
+          }
+        }
+      }
+    }
+  }
+]

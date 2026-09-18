@@ -50,7 +50,7 @@ dependencies {
     testImplementation(libs.androidx.compose.ui.graphics)
     testImplementation(libs.androidx.test.ext.junit)
     testImplementation(project(":contracts:ui"))
-    testImplementation(libs.robolectric.annotations)
+    testCompileOnly(libs.robolectric.annotations)
     testImplementation("com.android.tools.layoutlib:layoutlib-api:31.11.0-rc02")
     testRuntimeOnly(libs.robolectric)
     androidTestImplementation(libs.androidx.compose.ui.test)

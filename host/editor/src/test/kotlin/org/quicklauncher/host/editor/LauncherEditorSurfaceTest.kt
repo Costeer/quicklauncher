@@ -1,13 +1,21 @@
+@file:OptIn(androidx.compose.ui.test.ExperimentalTestApi::class)
+
 package org.quicklauncher.host.editor
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.pressKey
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -117,6 +125,81 @@ class LauncherEditorSurfaceTest {
         }
 
         compose.onNodeWithText("Rendered module preview").assertIsDisplayed()
+    }
+
+    @Test
+    fun `map editor follows logical focus order and activates a move-group control from D-pad`() {
+        compose.setContent {
+            MaterialTheme {
+                MapEditorSurface(mapState(), {})
+            }
+        }
+
+        traverseAndActivate("Include Home in move group", "Include Work in move group", Key.DirectionCenter)
+
+        compose.onNodeWithText("Remove Work from move group").assertIsDisplayed()
+    }
+
+    @Test
+    fun `destination editor follows logical focus order and activates a block command from keyboard`() {
+        val actions = mutableListOf<EditorAction>()
+        compose.setContent {
+            MaterialTheme {
+                DestinationEditorSurface(destinationState(), actions::add)
+            }
+        }
+
+        traverseAndActivate("Add Single layout", "Add Apps block", Key.Enter)
+
+        assertTrue(actions.any { it is EditorAction.AddBlock })
+    }
+
+    @Test
+    fun `onboarding follows logical focus order and activates install from D-pad`() {
+        val template = OnboardingTemplate(
+            TemplateOnboardingTest.TEMPLATE,
+            "Modular",
+            "Grid center with entry above and apps to the right",
+            "{}",
+            emptyList(),
+        )
+        val preview = OnboardingPreview(
+            TemplateOnboardingTest.TEMPLATE,
+            TemplateOnboardingTest.plan(TemplateOnboardingTest.BLOCK),
+            emptyList(),
+        )
+        var installed = false
+        compose.setContent {
+            MaterialTheme {
+                LauncherOnboardingSurface(
+                    templates = listOf(template),
+                    preview = preview,
+                    installed = false,
+                    message = null,
+                    onPreview = { _, _ -> },
+                    onInstall = { installed = true },
+                    onRequestHomeRole = {},
+                )
+            }
+        }
+
+        traverseAndActivate("Preview configured Modular", "Install this plan", Key.DirectionCenter)
+
+        assertTrue(installed)
+    }
+
+    private fun traverseAndActivate(
+        firstLabel: String,
+        secondLabel: String,
+        activationKey: Key,
+    ) {
+        compose.onNodeWithText(firstLabel)
+            .performSemanticsAction(SemanticsActions.RequestFocus)
+            .assertIsFocused()
+            .performKeyInput { pressKey(Key.Tab) }
+        compose.onNodeWithText(secondLabel)
+            .assertIsFocused()
+            .performKeyInput { pressKey(activationKey) }
     }
 
 }

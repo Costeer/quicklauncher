@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "contractId": "phase9-release-performance-v1",
+  "environment": {"sdk": 35, "variant": "stableBenchmark", "fixtureId": "phase9-five-destination-v1"},
+  "scenarios": [
+    {"name": "homeEntry", "iterations": 10, "metrics": [{"name": "timeToInitialDisplayMs", "statistic": "p95", "maximum": 1500}]},
+    {"name": "spatialGesture", "iterations": 1, "scenarioOperations": 20, "metrics": [{"name": "frameDurationCpuMs", "sampled": true, "statistic": "p95", "maximum": 32}, {"name": "frameOverrunMs", "sampled": true, "statistic": "p95", "maximum": 16}]},
+    {"name": "appCatalogLoading", "iterations": 10, "fixtureSize": 128, "interval": "benchmark request through receiver publication", "metrics": [{"name": "catalogReadyFirstMs", "statistic": "p95", "maximum": 750}]},
+    {"name": "searchFirstResult", "iterations": 10, "query": "security", "metrics": [{"name": "searchReadyFirstMs", "statistic": "p95", "maximum": 300}]},
+    {"name": "currentPlusNeighborsMemory", "iterations": 10, "destinationCount": 5, "structuralEvidence": "host/runtime/src/test/kotlin/org/quicklauncher/host/runtime/navigation/SpatialNavigatorTest.kt#frame contains only the current destination and its cardinal neighbors", "metrics": [{"name": "memoryRssTotalMiB", "components": ["memoryRssAnonMaxKb", "memoryRssFileMaxKb", "memoryRssShmemMaxKb"], "divisor": 1024, "statistic": "p95", "maximum": 256}]}
+  ]
+}

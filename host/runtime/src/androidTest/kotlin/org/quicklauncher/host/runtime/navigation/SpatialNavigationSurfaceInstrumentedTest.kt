@@ -9,15 +9,20 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.swipe
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -75,6 +80,32 @@ class SpatialNavigationSurfaceInstrumentedTest {
             assertEquals(null, state.frame.neighbors[SpatialDirection.RIGHT])
             assertEquals(false, state.move(SpatialDirection.RIGHT))
         }
+    }
+
+    @Test
+    fun focusedSurfaceMapsDpadKeysToCardinalMovementAndRejectsMissingNeighbors() {
+        val changes = mutableListOf<DestinationId>()
+        compose.setContent {
+            val state = rememberSpatialNavigationState(DESTINATIONS, CENTER, changes::add)
+            SpatialNavigationSurface(
+                state = state,
+                mode = GestureMode.CONTENT_HANDOFF,
+                reducedMotion = true,
+                modifier = Modifier.testTag("navigation"),
+            ) { destinationId ->
+                Text(destinationId.value.substringAfterLast('/'))
+            }
+        }
+
+        compose.onNodeWithTag("navigation")
+            .performSemanticsAction(SemanticsActions.RequestFocus)
+            .assertIsFocused()
+            .performKeyInput { pressKey(Key.DirectionUp) }
+        compose.runOnIdle { assertTrue(changes.isEmpty()) }
+
+        compose.onNodeWithTag("navigation")
+            .performKeyInput { pressKey(Key.DirectionRight) }
+        compose.runOnIdle { assertEquals(listOf(RIGHT), changes) }
     }
 
     @Test

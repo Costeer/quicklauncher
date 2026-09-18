@@ -2,6 +2,9 @@
 <full-backup-content>
     <include domain="database" path="quicklauncher.db" requireFlags="clientSideEncryption" />
     <include domain="file" path="datastore/launcher-preferences.pb" requireFlags="clientSideEncryption" />
-    <include domain="file" path="theme-assets" requireFlags="clientSideEncryption" />
+    <include domain="file" path="theme-assets/fonts" requireFlags="clientSideEncryption" />
+    <include domain="file" path="theme-assets/images" requireFlags="clientSideEncryption" />
+    <include domain="file" path="theme-assets/previews" requireFlags="clientSideEncryption" />
+    <include domain="file" path="theme-assets/preserved-backup-assets.v1" requireFlags="clientSideEncryption" />
     <include domain="sharedpref" path="portable-backup-web-adapters.xml" requireFlags="clientSideEncryption" />
 </full-backup-content>

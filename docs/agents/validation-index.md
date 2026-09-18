@@ -61,6 +61,19 @@ This index maps acceptance IDs to the smallest governing document set. Open the 
 | P8-SUPPORT | Redacted support bundles | ADR 0007 and 0017; SH-PRIVACY; Phase 8 scope remaining slice 7 |
 | P8-GATES | Cross-version and device evidence | ADR 0019 and 0029; SH-QUALITY; Phase 8 scope exit condition |
 
+## Phase 9
+
+| ID | Concern | Governing sections |
+| --- | --- | --- |
+| P9-A11Y | Release accessibility matrix | ADR 0019, 0022, 0028, and 0029; SH-QUALITY; `docs/status/phase-9-release-scope.md` "Accessibility contract"; authoritative row-by-row matrix `docs/status/phase-9-accessibility-evidence.md` |
+| P9-PERF | Measured release performance | ADR 0019, 0024, and 0029; SH-QUALITY; Phase 9 scope "Performance contract" |
+| P9-SECURITY | Security and privacy audit | ADR 0007, 0009, 0014, and 0017; SH-BOUNDARY and SH-PRIVACY; Phase 9 scope "Security and privacy contract" |
+| P9-RELEASE | Identity, signing, provenance, and downloaded-artifact verification | ADR 0009, 0024, and 0025; `docs/research/launcher-release-signing.md` "Release procedure"; Phase 9 scope "Release artifact contract" |
+| P9-CHANNELS | Stable, preview, and Obtainium metadata | ADR 0009 and 0024; Phase 9 scope "Release channels" |
+| P9-KEYS | Test-only key recovery and lineage drill | ADR 0025; release-signing research "Outcome"; Phase 9 scope "Key recovery drill" |
+| P9-DOCS | Installation, upgrade, backup, recovery, permission, privacy, and limitation guidance | ADR 0009, 0017, 0023, 0024, and 0028; Phase 9 scope "User documentation" |
+| P9-GATES | Complete contract and release evidence | ADR 0019, 0025, 0026, and 0029; SH-QUALITY, SH-RECOVERY, and SH-PRIVACY; Phase 9 scope exit condition |
+
 ## Reading rule
 
 The acceptance ID chooses the initial context. Search another document when the indexed text names an unresolved dependency or the code contradicts it. Record that extra source in the packet so later work can reproduce the decision.

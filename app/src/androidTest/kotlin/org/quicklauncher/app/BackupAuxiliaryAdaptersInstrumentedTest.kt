@@ -11,6 +11,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.quicklauncher.host.backup.archive.PortableBackupSection
 import org.quicklauncher.host.backup.archive.PortableBackupSectionType
+import org.quicklauncher.host.backup.library.RestoreAuxiliaryStageRequest
 import org.quicklauncher.host.backup.library.RestoreSelection
 import org.quicklauncher.host.backup.payload.SectionPayloadEntry
 import org.quicklauncher.host.backup.payload.SectionPayloadKind
@@ -50,15 +51,16 @@ class BackupAuxiliaryAdaptersInstrumentedTest {
             webAdapters = true,
             assets = false,
         )
+        val snapshot = InMemoryLauncherStore().read()
         val first = PersistedWebAdapterBackupPort(context)
-        first.stage(listOf(section), webOnly).commit()
+        first.stage(RestoreAuxiliaryStageRequest(snapshot, listOf(section), webOnly, emptyMap())).commit()
 
         val recreated = PersistedWebAdapterBackupPort(context)
         val exported = recreated.export(InMemoryLauncherStore().read())
         assertEquals(1, exported.size)
         assertArrayEquals(payload, exported.single().contentCopy())
 
-        recreated.stage(emptyList(), webOnly).commit()
+        recreated.stage(RestoreAuxiliaryStageRequest(snapshot, emptyList(), webOnly, emptyMap())).commit()
         assertEquals(emptyList<PortableBackupSection>(), recreated.export(InMemoryLauncherStore().read()))
     }
 
@@ -79,12 +81,20 @@ class BackupAuxiliaryAdaptersInstrumentedTest {
         )
         val port = PersistedWebAdapterBackupPort(context)
         val webOnly = RestoreSelection(false, false, true, false)
-        port.stage(listOf(section), webOnly).commit()
+        val snapshot = InMemoryLauncherStore().read()
+        port.stage(RestoreAuxiliaryStageRequest(snapshot, listOf(section), webOnly, emptyMap())).commit()
 
-        port.stage(emptyList(), RestoreSelection(true, false, false, false)).commit()
+        port.stage(
+            RestoreAuxiliaryStageRequest(
+                snapshot,
+                emptyList(),
+                RestoreSelection(true, false, false, false),
+                emptyMap(),
+            ),
+        ).commit()
         assertArrayEquals(payload, port.export(InMemoryLauncherStore().read()).single().contentCopy())
 
-        val clearing = port.stage(emptyList(), webOnly)
+        val clearing = port.stage(RestoreAuxiliaryStageRequest(snapshot, emptyList(), webOnly, emptyMap()))
         clearing.commit()
         assertEquals(emptyList<PortableBackupSection>(), port.export(InMemoryLauncherStore().read()))
         clearing.discard()
@@ -95,12 +105,22 @@ class BackupAuxiliaryAdaptersInstrumentedTest {
     fun opaqueLauncherExtensionsSurviveRecreationAndRollback() = runBlocking {
         val mapOnly = RestoreSelection(true, false, false, false)
         val port = PersistedWebAdapterBackupPort(context)
-        port.stage(emptyList(), mapOnly, mapOf("future.record" to byteArrayOf(4, 5, 6))).commit()
+        val snapshot = InMemoryLauncherStore().read()
+        port.stage(
+            RestoreAuxiliaryStageRequest(
+                snapshot,
+                emptyList(),
+                mapOnly,
+                mapOf("future.record" to byteArrayOf(4, 5, 6)),
+            ),
+        ).commit()
 
         val recreated = PersistedWebAdapterBackupPort(context)
         assertArrayEquals(byteArrayOf(4, 5, 6), recreated.export().getValue("future.record"))
 
-        val clearing = recreated.stage(emptyList(), mapOnly, emptyMap())
+        val clearing = recreated.stage(
+            RestoreAuxiliaryStageRequest(snapshot, emptyList(), mapOnly, emptyMap()),
+        )
         clearing.commit()
         assertEquals(emptyMap<String, ByteArray>(), recreated.export())
         clearing.discard()

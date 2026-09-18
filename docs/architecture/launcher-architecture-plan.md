@@ -112,11 +112,11 @@ Release gates cover:
 - API 35 AOSP and the current GrapheneOS reference Pixel. Extra devices add evidence but do not replace either required target.
 - Dependency boundaries, absence of Google dependencies, static analysis, licenses, signing identity, provenance, checksums, and downloaded-artifact verification.
 
-Stable and preview use separate application IDs, stores, signing keys, and release channels. Protected GitHub Actions environments reconstruct the channel key only after maintainer approval, sign one universal APK, and publish provenance, certificate, and digest data. Pull-request jobs cannot access signing secrets. Each key also has two encrypted offline backups and a planned v3 signing lineage. See [ADR 0025](../adr/0025-sign-release-apks-in-github-actions.md) and the earlier [release-signing research](../research/launcher-release-signing.md).
+Stable and preview use separate application IDs, stores, signing keys, and release channels. Protected GitHub Actions environments reconstruct the channel key only after maintainer approval, sign one universal APK, and publish provenance, certificate, and digest data. Pull-request jobs cannot access signing secrets. Repository verification uses disposable keys to prove two encrypted backup restores and a v3 signing lineage without asserting anything about production-key custody. See [ADR 0025](../adr/0025-sign-release-apks-in-github-actions.md) and the earlier [release-signing research](../research/launcher-release-signing.md).
 
 ## Remaining sequence
 
-Phases 0 through 7 are complete. Details and latest verification are in [current state](../status/current-state.md).
+Phases 0 through 8 are complete. Details and latest verification are in [current state](../status/current-state.md).
 
 ### Phase 5: platform content
 
@@ -148,11 +148,15 @@ Publish the archive format. Add user-selected folders, manual and seven-snapshot
 
 Exit when cross-version round trips pass, corrupt archives cannot alter live state, and restore always retains the safe layout.
 
+Status: complete. Portable bounded archives, optional authenticated encryption, SAF-backed manual and seven-snapshot automatic backups, staged category restore, pre-restore recovery, reauthorization review, support diagnostics, and exact-kind theme asset handling are implemented. Local, visual, license, workflow, privacy, module-boundary, and pinned API 35 AOSP gates pass; see [Phase 8 backup evidence](../status/phase-8-backup-evidence.md). The repository has no Phase 8 macrobenchmark task or module; measured accessibility and performance thresholds remain Phase 9 release-hardening work.
+
 ### Phase 9: release hardening
 
 Finish device accessibility and performance thresholds, security and privacy audits, signing and provenance, Obtainium metadata, key-restore drills, and user documentation.
 
-Exit when every contract has evidence and the downloaded draft APK matches its tag, application ID, certificate, and digest.
+Exit when every contract has evidence and the downloaded draft APK matches its tag and immutable commit, version code, application ID, minimum SDK, v3 signature scheme, independently trusted certificate, checksum, and attested provenance subject digest.
+
+Status: in progress. The isolated benchmark module and fail-closed thresholds cover all five ADR 0019 scenarios. The checked-in [accessibility matrix](../status/phase-9-accessibility-evidence.md) maps every production host and contribution surface to exact local and device evidence. The exact `ProductionSelectedLayoutShell` was extracted as a deeper production test seam without changing module boundaries; the API 35 repair adds explicit shell focus order, deterministic keyboard input, cold-start onboarding synchronization, and a debug-only Compose test activity excluded from release variants. Exact security/privacy audits, separate protected stable/preview draft workflows, installed-target-bound benchmark metadata, independent artifact verification, Obtainium metadata, disposable-key recovery, and user documentation are implemented. The owner-authorized current GrapheneOS Pixel matrix passes with exact semantic restoration. On source fingerprint `7912ef41bc5ae2a6fffb9150ca9075aedc16b53540bb59c7b724612758ae8287`, the pinned API 35 matrix passed 80 of 83 tests with three expected skips and no failures, and all five benchmark scenarios plus all six thresholds passed; benchmark repairs cover signing/emulator acknowledgement, permission and selector correctness, and R8/resource shrinking from 34.7MB to 5.78MB using narrow KSP/protobuf rules. Exact semantic restoration and offline no-snapshot shutdown passed. Separately, the final aggregate, visual, license, and non-Gradle repository gates pass on fingerprint `f8a76ee4c87da5749f52f9fc93cb262cb9434358e81c8e97d9433e71840fa97f`; dependency health required moving the Compose test manifest from `debugImplementation` to `debugRuntimeOnly`, after which the affected gate passed. Both final review axes pass on documentation-inclusive fingerprint `6b1337cd066ca29925563bc02b571a85afb8062eb426a9ed4767e0510577bd88` with zero specification findings and zero documented-standard violations. The protected real-draft redownload/provenance verification remains blocked by absent immutable remote/tag/authenticated protected configuration; see [Phase 9 release evidence](../status/phase-9-release-evidence.md).
 
 ## Deferred beyond 1.0
 

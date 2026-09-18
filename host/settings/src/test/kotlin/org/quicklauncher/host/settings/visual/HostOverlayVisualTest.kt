@@ -25,14 +25,19 @@ import com.android.resources.NightMode
 import com.android.resources.ScreenOrientation
 import org.junit.Rule
 import org.junit.Test
+import org.quicklauncher.contracts.domain.ActivityName
+import org.quicklauncher.contracts.domain.AppActivityIdentity
+import org.quicklauncher.contracts.domain.ContributionId
 import org.quicklauncher.contracts.domain.DestinationId
 import org.quicklauncher.contracts.domain.ContentItemId
 import org.quicklauncher.contracts.domain.ModuleInstanceId
+import org.quicklauncher.contracts.domain.PackageName
 import org.quicklauncher.contracts.domain.ProfileSerial
 import org.quicklauncher.contracts.domain.ThemeProfileId
 import org.quicklauncher.contracts.domain.ArgbColor
 import org.quicklauncher.host.runtime.LauncherDestination
 import org.quicklauncher.host.runtime.RecoveryInstance
+import org.quicklauncher.host.runtime.catalog.AppIcon
 import org.quicklauncher.host.runtime.actions.ItemAction
 import org.quicklauncher.host.runtime.actions.ItemActionOverlayState
 import org.quicklauncher.host.runtime.actions.ItemAvailability
@@ -41,10 +46,12 @@ import org.quicklauncher.host.runtime.folders.FolderMemberPresentation
 import org.quicklauncher.host.runtime.folders.FolderOverlayState
 import org.quicklauncher.host.runtime.permissions.HomeRoleState
 import org.quicklauncher.host.runtime.profile.PrivateSpaceState
+import org.quicklauncher.host.runtime.profile.PrivateProfileItem
 import org.quicklauncher.host.runtime.profile.ProfileAvailability
 import org.quicklauncher.host.runtime.profile.ProfileTransition
 import org.quicklauncher.host.runtime.profile.SecureOverlayProtection
 import org.quicklauncher.host.settings.FolderOverlaySurface
+import org.quicklauncher.host.settings.CreateFolderDialog
 import org.quicklauncher.host.settings.ItemActionOverlaySurface
 import org.quicklauncher.host.settings.LauncherSettingsSurface
 import org.quicklauncher.host.settings.AppRecoverySurface
@@ -53,12 +60,17 @@ import org.quicklauncher.host.settings.PrivateSpaceOverlay
 import org.quicklauncher.host.settings.RecoverySurface
 import org.quicklauncher.host.settings.ThemeProfileSetting
 import org.quicklauncher.host.settings.ThemeProfileSettingsContent
+import org.quicklauncher.host.settings.ThemeSettingsContent
+import org.quicklauncher.host.settings.ThemeOverrideSetting
+import org.quicklauncher.host.settings.IconPackSetting
 import org.quicklauncher.host.settings.WallpaperConfirmationContent
 import org.quicklauncher.host.settings.ManualPaletteSetting
 import org.quicklauncher.host.settings.ManualPaletteSettingsContent
 import org.quicklauncher.host.settings.BackupSettingsContent
 import org.quicklauncher.host.settings.BackupSnapshotSetting
 import org.quicklauncher.host.settings.BackupRestoreReviewSetting
+import org.quicklauncher.host.runtime.theme.IconPackDialect
+import org.quicklauncher.host.runtime.theme.IconPackSelection
 
 class HostOverlayVisualTest {
     @get:Rule
@@ -153,6 +165,77 @@ class HostOverlayVisualTest {
                         )
                     }
                 }
+            }
+        }
+    }
+
+    @Test
+    fun `missing settings states remain accessible at large text`() {
+        snapshot(largeTextVariant, "create-folder-dialog") {
+            CreateFolderDialog(onCreate = {}, onDismiss = {})
+        }
+        listOf(
+            "theme-settings-top" to 0,
+            "theme-settings-middle" to 760,
+            "theme-settings-bottom" to 1_500,
+            "theme-settings-end" to 10_000,
+        ).forEach { (surface, scrollDp) ->
+            snapshot(largeTextVariant, surface) {
+                val initialScroll = with(LocalDensity.current) { scrollDp.dp.roundToPx() }
+                Surface(Modifier.fillMaxSize()) {
+                    Column(
+                        Modifier.fillMaxSize()
+                            .verticalScroll(rememberScrollState(initial = initialScroll))
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        ThemeSettingsContent(
+                            themeProfiles = themeProfiles,
+                            themeMessage = "Preview changes are local until selected.",
+                            manualPalette = manualPalette,
+                            themeOverrides = themeOverrides,
+                            iconPacks = iconPacks,
+                        )
+                    }
+                }
+            }
+        }
+        listOf(
+            "private-locked" to PrivateSpaceState(
+                ProfileSerial.of(20),
+                ProfileAvailability.LOCKED,
+                ProfileTransition.IDLE,
+                emptyList(),
+            ),
+            "private-loading" to PrivateSpaceState(
+                ProfileSerial.of(20),
+                ProfileAvailability.LOCKED,
+                ProfileTransition.UNLOCKING,
+                emptyList(),
+            ),
+            "private-empty" to PrivateSpaceState(
+                ProfileSerial.of(20),
+                ProfileAvailability.AVAILABLE,
+                ProfileTransition.IDLE,
+                emptyList(),
+            ),
+            "private-unlocked" to PrivateSpaceState(
+                ProfileSerial.of(20),
+                ProfileAvailability.AVAILABLE,
+                ProfileTransition.IDLE,
+                listOf(privateItem),
+            ),
+        ).forEach { (surface, state) ->
+            snapshot(largeTextVariant, surface) {
+                PrivateSpaceOverlay(
+                    state = state,
+                    protection = noOpProtection,
+                    onLock = {},
+                    onUnlock = {},
+                    onLaunch = {},
+                    onOpenSettings = {},
+                    onClose = {},
+                )
             }
         }
     }
@@ -427,6 +510,52 @@ class HostOverlayVisualTest {
 
         val noOpProtection = SecureOverlayProtection { AutoCloseable {} }
 
+        val privateItem = PrivateProfileItem(
+            identity = AppActivityIdentity(
+                ProfileSerial.of(20),
+                PackageName.parse("org.quicklauncher.fixture.private"),
+                ActivityName.parse("org.quicklauncher.fixture.private.MainActivity"),
+            ),
+            label = "Private app with a deliberately long label",
+            icon = AppIcon.of(byteArrayOf(1)),
+        )
+
+        val themeProfiles = listOf(
+            ThemeProfileSetting(
+                ThemeProfileId.parse("org.quicklauncher.theme/system"),
+                "System",
+                selected = true,
+                previewed = false,
+            ),
+            ThemeProfileSetting(
+                ThemeProfileId.parse("org.quicklauncher.theme/expressive"),
+                "Expressive theme with a deliberately long label",
+                selected = false,
+                previewed = true,
+                deletable = true,
+            ),
+        )
+        val manualPalette = ManualPaletteSetting(
+            ThemeProfileId.parse("org.quicklauncher.theme/manual"),
+            ArgbColor.of(0xff2949a3L),
+            ArgbColor.of(0xffffffffL),
+            ArgbColor.of(0xfff5f5f5L),
+            ArgbColor.of(0xff161616L),
+        )
+        val themeOverrides = listOf(
+            ThemeOverrideSetting(
+                ContributionId.parse("org.quicklauncher.block/favorites"),
+                "Favorites block accent",
+                ArgbColor.of(0xff6750a4L),
+            ),
+        )
+        val iconPacks = listOf(
+            IconPackSetting(
+                IconPackSelection("org.quicklauncher.fixture.icons", IconPackDialect.NOVA),
+                "Fixture icon pack with a deliberately long label",
+            ),
+        )
+
         val variants = listOf(
             VisualVariant(
                 id = "light-portrait",
@@ -444,6 +573,7 @@ class HostOverlayVisualTest {
                 device = device(false, true),
             ),
         )
+        val largeTextVariant = variants.single { it.id == "large-text-light-portrait" }
 
         fun device(landscape: Boolean, largeText: Boolean): DeviceConfig =
             DeviceConfig.PIXEL_5.copy(

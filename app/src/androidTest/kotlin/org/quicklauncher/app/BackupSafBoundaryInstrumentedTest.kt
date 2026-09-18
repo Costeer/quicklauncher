@@ -8,6 +8,8 @@ import android.database.Cursor
 import android.database.MatrixCursor
 import android.net.Uri
 import android.os.CancellationSignal
+import android.os.Handler
+import android.os.Looper
 import android.os.ParcelFileDescriptor
 import android.provider.DocumentsContract
 import android.provider.DocumentsProvider
@@ -15,6 +17,8 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import java.io.File
 import java.io.FileNotFoundException
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -98,7 +102,10 @@ class BackupSafBoundaryInstrumentedTest {
         val completed = folder.write(completedName, byteArrayOf(1, 2, 3))
 
         assertEquals(completedName, completed.displayName)
-        assertTrue(provider.documents.values.any { it.displayName == completedName })
+        assertArrayEquals(
+            byteArrayOf(1, 2, 3),
+            provider.documents.values.single { it.displayName == completedName }.bytes,
+        )
         assertFalse(provider.documents.values.any { it.displayName.endsWith(".partial") })
 
         provider.failRename = true
@@ -132,6 +139,7 @@ class BackupSafBoundaryInstrumentedTest {
         var failDelete = false
         var failRename = false
         private var nextDocument = 0
+        private val pendingWrites = mutableMapOf<String, CountDownLatch>()
 
         override fun onCreate(): Boolean = true
 
@@ -163,14 +171,24 @@ class BackupSafBoundaryInstrumentedTest {
             val file = File.createTempFile("backup-saf-", ".tmp", testContext.cacheDir)
             file.writeBytes(document.bytes)
             file.deleteOnExit()
-            val descriptorMode = if ('w' in mode) {
+            if ('w' !in mode) {
+                return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+            }
+            val closed = CountDownLatch(1)
+            pendingWrites[documentId] = closed
+            return ParcelFileDescriptor.open(
+                file,
                 ParcelFileDescriptor.MODE_WRITE_ONLY or
                     ParcelFileDescriptor.MODE_CREATE or
-                    ParcelFileDescriptor.MODE_TRUNCATE
-            } else {
-                ParcelFileDescriptor.MODE_READ_ONLY
+                    ParcelFileDescriptor.MODE_TRUNCATE,
+                Handler(Looper.getMainLooper()),
+            ) {
+                documents[documentId]?.let { stored ->
+                    documents[documentId] = stored.copy(bytes = file.readBytes(), size = file.length())
+                }
+                file.delete()
+                closed.countDown()
             }
-            return ParcelFileDescriptor.open(file, descriptorMode)
         }
 
         override fun createDocument(parentDocumentId: String, mimeType: String, displayName: String): String {
@@ -181,6 +199,9 @@ class BackupSafBoundaryInstrumentedTest {
         }
 
         override fun renameDocument(documentId: String, displayName: String): String {
+            check(pendingWrites.remove(documentId)?.await(5, TimeUnit.SECONDS) != false) {
+                "rename occurred before the output descriptor closed"
+            }
             if (failRename) throw FileNotFoundException("injected rename failure")
             val existing = documents[documentId] ?: throw FileNotFoundException(documentId)
             documents[documentId] = existing.copy(displayName = displayName)

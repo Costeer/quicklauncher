@@ -71,7 +71,7 @@ class ThemeController(
     private val registeredCapabilities: Map<ContributionId, Set<CapabilityId>>,
     private val availableFontAssets: suspend () -> Set<StableKey> = { emptySet() },
     private val availableImageAssets: suspend () -> Set<StableKey> = { emptySet() },
-    private val cleanupAssets: suspend (Set<StableKey>) -> Unit = {},
+    private val cleanupAssets: suspend (Set<ThemeAssetIdentity>) -> Unit = {},
     parentScope: CoroutineScope,
 ) : AutoCloseable {
     private val scope = CoroutineScope(parentScope.coroutineContext + Job(parentScope.coroutineContext[Job]))
@@ -366,7 +366,7 @@ class ThemeController(
         }
     }
 
-    private suspend fun cleanupBestEffort(referenced: Set<StableKey>) {
+    private suspend fun cleanupBestEffort(referenced: Set<ThemeAssetIdentity>) {
         try {
             cleanupAssets(referenced)
         } catch (cancelled: CancellationException) {
@@ -453,19 +453,22 @@ class ThemeController(
 
     private fun checkOpen() = check(!closed.get()) { "Theme controller is closed" }
 
-    private fun referencedAssets(value: ThemeControllerState): Set<StableKey> = buildSet {
+    private fun referencedAssets(value: ThemeControllerState): Set<ThemeAssetIdentity> = buildSet {
         value.profiles.forEach { profile ->
-            profile.fonts.values.forEach { add(it.assetId) }
-            profile.imageDerived?.let { add(it.previewId) }
+            profile.fonts.values.forEach { add(ThemeAssetIdentity(it.assetId, ThemeAssetKind.FONT)) }
+            profile.overrides.mapNotNull { it.font }.forEach {
+                add(ThemeAssetIdentity(it.assetId, ThemeAssetKind.FONT))
+            }
+            profile.imageDerived?.let { add(ThemeAssetIdentity(it.previewId, ThemeAssetKind.PREVIEW)) }
             profile.background?.let { addBackgroundAssets(it) }
         }
         value.backgrounds.values.forEach { addBackgroundAssets(it) }
     }
 
-    private fun MutableSet<StableKey>.addBackgroundAssets(background: BackgroundDefinition) {
+    private fun MutableSet<ThemeAssetIdentity>.addBackgroundAssets(background: BackgroundDefinition) {
         if (background is BackgroundDefinition.Image) {
-            add(background.assetId)
-            add(background.previewId)
+            add(ThemeAssetIdentity(background.assetId, ThemeAssetKind.IMAGE))
+            add(ThemeAssetIdentity(background.previewId, ThemeAssetKind.PREVIEW))
         }
     }
 

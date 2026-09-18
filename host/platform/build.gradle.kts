@@ -23,6 +23,7 @@ dependencies {
     api(libs.androidx.compose.runtime)
     api(libs.androidx.compose.ui)
     api(libs.kotlinx.coroutines.core)
+    api(project(":host:backup"))
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
 

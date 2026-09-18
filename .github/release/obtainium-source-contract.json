@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "bytes": 10814,
+      "commit": "af286fa8d31d7406d6db167e2314d376d74f7696",
+      "path": "lib/models/app.dart",
+      "sha256": "b6b4cbb214cd413a5f24271f8a830e05ee2bfd0d1593750f1bb6f7bee92bba29",
+      "url": "https://github.com/ImranR98/Obtainium/blob/af286fa8d31d7406d6db167e2314d376d74f7696/lib/models/app.dart"
+    },
+    {
+      "bytes": 17436,
+      "commit": "af286fa8d31d7406d6db167e2314d376d74f7696",
+      "path": "lib/app_sources/app_source.dart",
+      "sha256": "c41f838e22deeb23a7acc5812ae51dee87ce971e3e48c238d5f6f7cd888a78ad",
+      "url": "https://github.com/ImranR98/Obtainium/blob/af286fa8d31d7406d6db167e2314d376d74f7696/lib/app_sources/app_source.dart"
+    },
+    {
+      "bytes": 32874,
+      "commit": "af286fa8d31d7406d6db167e2314d376d74f7696",
+      "path": "lib/app_sources/github.dart",
+      "sha256": "93687f425212e94713ecafadbfcd41f1d50f44078ae3728b35ee4a0ed1fb27ba",
+      "url": "https://github.com/ImranR98/Obtainium/blob/af286fa8d31d7406d6db167e2314d376d74f7696/lib/app_sources/github.dart"
+    },
+    {
+      "bytes": 5758,
+      "commit": "2a62ed9288f9efe8e888f27be11d9f88e21df7a1",
+      "path": "CONTRIBUTING.md",
+      "sha256": "8465368ba77cbfe4fe5d2065317e70607dcfa092bbd39fba2b701cd6c89d12c2",
+      "url": "https://github.com/ImranR98/apps.obtainium.imranr.dev/blob/2a62ed9288f9efe8e888f27be11d9f88e21df7a1/CONTRIBUTING.md"
+    }
+  ],
+  "allowedTopLevelKeys": [
+    "additionalSettings",
+    "author",
+    "id",
+    "name",
+    "overrideSource",
+    "preferredApkIndex",
+    "url"
+  ],
+  "allowedAdditionalSettingsKeys": [
+    "allowInsecure",
+    "apkFilterRegEx",
+    "autoApkFilterByArch",
+    "fallbackToOlderReleases",
+    "filterReleaseTitlesByRegEx",
+    "includePrereleases",
+    "invertAPKFilter",
+    "trackOnly",
+    "verifyLatestTag"
+  ],
+  "selectorFacts": {
+    "apkFilterRegExFiltersAssetNames": true,
+    "draftReleasesAreExcluded": true,
+    "filterReleaseTitlesByRegExUsesReleaseNameWithTagFallback": true,
+    "includePrereleasesFalseExcludesPrereleases": true
+  }
+}

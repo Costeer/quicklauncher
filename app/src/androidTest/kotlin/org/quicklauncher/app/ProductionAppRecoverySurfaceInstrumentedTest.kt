@@ -2,12 +2,21 @@ package org.quicklauncher.app
 
 import org.quicklauncher.host.runtime.contentItemId
 
+import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.platform.LocalInputModeManager
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.pressKey
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.SdkSuppress
 import org.junit.Assert.assertEquals
@@ -73,6 +82,43 @@ class ProductionAppRecoverySurfaceInstrumentedTest {
         compose.onNodeWithText("No apps are available for recovery").assertIsDisplayed()
         compose.onNodeWithText("Close").assertIsDisplayed().assertHasClickAction().performClick()
         assertEquals(1, closeCount)
+    }
+
+    @Test
+    fun `close launch and actions traverse focus and activate from keyboard and D-pad`() {
+        val app = app(profile = 10, label = "Documents", workProfile = true)
+        val launched = mutableListOf<AppActivityIdentity>()
+        val openedActions = mutableListOf<ContentItemId>()
+        var closeCount = 0
+        lateinit var requestKeyboardInput: () -> Boolean
+        compose.setContent {
+            val inputModeManager = LocalInputModeManager.current
+            requestKeyboardInput = { inputModeManager.requestInputMode(InputMode.Keyboard) }
+            ProductionAppRecoverySurface(
+                apps = listOf(app),
+                onLaunch = launched::add,
+                onOpenActions = openedActions::add,
+                onClose = { closeCount += 1 },
+            )
+        }
+        compose.runOnIdle { check(requestKeyboardInput()) }
+
+        compose.onNodeWithText("Close")
+            .performSemanticsAction(SemanticsActions.RequestFocus)
+            .assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionCenter) }
+        compose.onRoot().performKeyInput { pressKey(Key.Tab) }
+        compose.onNodeWithContentDescription("Launch Documents")
+            .assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.Enter) }
+        compose.onRoot().performKeyInput { pressKey(Key.Tab) }
+        compose.onNodeWithContentDescription("Actions for Documents")
+            .assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionCenter) }
+
+        assertEquals(1, closeCount)
+        assertEquals(listOf(app.identity), launched)
+        assertEquals(listOf(contentItemId(app)), openedActions)
     }
 
     private fun app(profile: Long, label: String, workProfile: Boolean): LauncherApp {

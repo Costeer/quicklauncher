@@ -4,6 +4,7 @@ import android.graphics.BitmapFactory
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,8 +28,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
@@ -41,7 +45,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -79,6 +82,8 @@ import org.quicklauncher.contracts.ui.WindowInfo
 import org.quicklauncher.contracts.ui.WindowOrientation
 import org.quicklauncher.host.data.preferences.LauncherPreferences
 import org.quicklauncher.host.data.preferences.LauncherPreferencesStore
+import org.quicklauncher.host.data.preferences.GestureMode
+import org.quicklauncher.host.data.store.DestinationRecord
 import org.quicklauncher.host.data.store.LauncherSnapshot
 import org.quicklauncher.host.data.store.LauncherStore
 import org.quicklauncher.host.data.store.WidgetBindState
@@ -288,20 +293,18 @@ internal fun ProductionCompositionSurface(
         }
         return
     }
-    val navigation = rememberSpatialNavigationState(latest.destinations, current) { destinationId ->
-        scope.launch { runtime.selectDestination(destinationId) }
-    }
-    PredictiveBackHandler(enabled = navigation.frame.drag != null) { progress ->
-        progress.collect()
-        navigation.cancelPreview()
-    }
-    Box(modifier.fillMaxSize()) {
-        SpatialNavigationSurface(
-            state = navigation,
-            mode = preferencesState.gestureMode,
-            reducedMotion = resolvedTheme.theme.reducedMotion,
-            modifier = Modifier.fillMaxSize(),
-        ) { destinationId ->
+    ProductionSelectedLayoutShell(
+        destinations = latest.destinations,
+        current = current,
+        mode = preferencesState.gestureMode,
+        reducedMotion = resolvedTheme.theme.reducedMotion,
+        onDestinationChanged = { destinationId ->
+            scope.launch { runtime.selectDestination(destinationId) }
+        },
+        onOpenMap = { runtime.open(org.quicklauncher.host.runtime.LauncherSurface.MAP_OVERVIEW) },
+        onOpenSettings = { runtime.open(org.quicklauncher.host.runtime.LauncherSurface.SETTINGS) },
+        modifier = modifier,
+        destination = { destinationId ->
             val destinationTheme = destinationThemes[destinationId] ?: fallbackResolvedTheme
             LauncherMaterialTheme(destinationTheme, rememberThemeTypography(destinationTheme, themeAssets)) {
                 ResolvedThemeBackground(destinationTheme, themeAssets) {
@@ -314,43 +317,92 @@ internal fun ProductionCompositionSurface(
                     )
                 }
             }
+        },
+        bottomControls = {
+            WidgetBindingControls(
+                snapshot = latest,
+                current = current,
+                profiles = profileState,
+                platform = widgetPlatform,
+                coordinator = widgetCoordinator,
+                transientEvents = widgetTransientEvents,
+                scope = scope,
+                onChanged = { widgetEpoch++ },
+                modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
+            )
+            WidgetResizeControls(
+                snapshot = latest,
+                current = current,
+                coordinator = widgetCoordinator,
+                transientEvents = widgetTransientEvents,
+                maximumSize = WidgetSize(
+                    configuration.screenWidthDp.coerceAtLeast(MINIMUM_WIDGET_SIZE_DP),
+                    configuration.screenHeightDp.coerceAtLeast(MINIMUM_WIDGET_SIZE_DP),
+                ),
+                scope = scope,
+                onChanged = { widgetEpoch++ },
+                modifier = Modifier.align(Alignment.BottomStart).padding(16.dp),
+            )
+        },
+    )
+}
+
+/** Exact launcher-owned selected-layout frame and chrome shared by production and visual evidence. */
+@Composable
+internal fun ProductionSelectedLayoutShell(
+    destinations: Collection<DestinationRecord>,
+    current: DestinationId,
+    mode: GestureMode,
+    reducedMotion: Boolean,
+    onDestinationChanged: (DestinationId) -> Unit,
+    onOpenMap: () -> Unit,
+    onOpenSettings: () -> Unit,
+    modifier: Modifier = Modifier,
+    bottomControls: @Composable BoxScope.() -> Unit = {},
+    destination: @Composable (DestinationId) -> Unit,
+) {
+    val navigation = rememberSpatialNavigationState(destinations, current, onDestinationChanged)
+    val navigationFocusRequester = remember { FocusRequester() }
+    val mapFocusRequester = remember { FocusRequester() }
+    val settingsFocusRequester = remember { FocusRequester() }
+    PredictiveBackHandler(enabled = navigation.frame.drag != null) { progress ->
+        org.quicklauncher.host.runtime.navigation.PredictiveBackCommitPolicy.collect(progress) {
+            navigation.cancelPreview()
         }
+    }
+    Box(modifier.fillMaxSize()) {
+        SpatialNavigationSurface(
+            state = navigation,
+            mode = mode,
+            reducedMotion = reducedMotion,
+            modifier = Modifier
+                .fillMaxSize()
+                .focusRequester(navigationFocusRequester)
+                .focusProperties { next = mapFocusRequester },
+            destination = destination,
+        )
         val mapDescription = stringResource(org.quicklauncher.host.runtime.R.string.map_overview)
         val settingsDescription = stringResource(org.quicklauncher.host.runtime.R.string.launcher_settings)
         Row(Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(8.dp)) {
             TextButton(
-                onClick = { runtime.open(org.quicklauncher.host.runtime.LauncherSurface.MAP_OVERVIEW) },
-                modifier = Modifier.semantics { contentDescription = mapDescription },
+                onClick = onOpenMap,
+                modifier = Modifier
+                    .focusRequester(mapFocusRequester)
+                    .focusProperties {
+                        previous = navigationFocusRequester
+                        next = settingsFocusRequester
+                    }
+                    .semantics { contentDescription = mapDescription },
             ) { Text(mapDescription) }
             TextButton(
-                onClick = { runtime.open(org.quicklauncher.host.runtime.LauncherSurface.SETTINGS) },
-                modifier = Modifier.semantics { contentDescription = settingsDescription },
+                onClick = onOpenSettings,
+                modifier = Modifier
+                    .focusRequester(settingsFocusRequester)
+                    .focusProperties { previous = mapFocusRequester }
+                    .semantics { contentDescription = settingsDescription },
             ) { Text(settingsDescription) }
         }
-        WidgetBindingControls(
-            snapshot = latest,
-            current = current,
-            profiles = profileState,
-            platform = widgetPlatform,
-            coordinator = widgetCoordinator,
-            transientEvents = widgetTransientEvents,
-            scope = scope,
-            onChanged = { widgetEpoch++ },
-            modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
-        )
-        WidgetResizeControls(
-            snapshot = latest,
-            current = current,
-            coordinator = widgetCoordinator,
-            transientEvents = widgetTransientEvents,
-            maximumSize = WidgetSize(
-                configuration.screenWidthDp.coerceAtLeast(MINIMUM_WIDGET_SIZE_DP),
-                configuration.screenHeightDp.coerceAtLeast(MINIMUM_WIDGET_SIZE_DP),
-            ),
-            scope = scope,
-            onChanged = { widgetEpoch++ },
-            modifier = Modifier.align(Alignment.BottomStart).padding(16.dp),
-        )
+        bottomControls()
     }
 }
 
@@ -443,7 +495,7 @@ internal suspend fun resizeWidget(
 }
 
 @Composable
-private fun WidgetResizeControls(
+internal fun WidgetResizeControls(
     snapshot: LauncherSnapshot,
     current: DestinationId,
     coordinator: WidgetCoordinator?,
@@ -452,6 +504,7 @@ private fun WidgetResizeControls(
     scope: CoroutineScope,
     onChanged: () -> Unit,
     modifier: Modifier = Modifier,
+    initiallyOpen: Boolean = false,
 ) {
     if (coordinator == null) return
     val visible = visibleWidgetInstances(snapshot, current)
@@ -463,7 +516,7 @@ private fun WidgetResizeControls(
     }
     if (placements.isEmpty()) return
 
-    var open by remember(placements.map { it.moduleInstanceId }) { mutableStateOf(false) }
+    var open by remember(placements.map { it.moduleInstanceId }) { mutableStateOf(initiallyOpen) }
     var localSizes by remember(
         placements.map { Triple(it.moduleInstanceId, it.intendedWidthDp, it.intendedHeightDp) },
     ) {
@@ -508,7 +561,7 @@ private fun WidgetResizeControls(
                     )
                     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
                         Text("Widget ${placements.indexOf(durable) + 1}: ${size.widthDp} by ${size.heightDp} dp")
-                        Row {
+                        Column {
                             WidgetResizeButton("Decrease width") {
                                 launchTask {
                                     val result = resizeWidget(
@@ -556,7 +609,7 @@ private fun WidgetResizeControls(
                                 }
                             }
                         }
-                        Row {
+                        Column {
                             WidgetResizeButton("Decrease height") {
                                 launchTask {
                                     val result = resizeWidget(

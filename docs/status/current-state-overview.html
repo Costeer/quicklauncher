@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Quicklauncher Phase 7 theme-system verification status as of 16 September 2026.">
+  <meta name="description" content="Quicklauncher Phase 9 release-hardening status as of 18 September 2026.">
   <title>Quicklauncher · Current state</title>
   <style>
     :root {
@@ -94,7 +94,7 @@
     .phase-track {
       margin-top: 44px;
       display: grid;
-      grid-template-columns: repeat(8, 1fr);
+      grid-template-columns: repeat(10, 1fr);
       gap: 8px;
     }
     .phase {
@@ -239,7 +239,7 @@
         <a href="#architecture">Architecture</a>
         <a href="#capabilities">Capabilities</a>
         <a href="#evidence">Evidence</a>
-        <a href="#blocker">Phase 7</a>
+        <a href="#blocker">Phase 9</a>
       </nav>
     </div>
   </header>
@@ -247,9 +247,9 @@
   <main>
     <section class="hero">
       <div class="shell">
-        <span class="eyebrow">Phase 7 verified · Phase 8 backup next</span>
+        <span class="eyebrow">Phase 9 repository candidate · authority-bound evidence open</span>
         <h1>A launcher built around hard boundaries.</h1>
-        <p class="hero-copy"><strong>Phases 0–7 are complete.</strong> One host-owned theme system now covers deterministic profiles and palettes, bounded imports, Nova/ADW icons, backgrounds, image derivation, accessible Settings, and explicitly confirmed wallpaper execution.</p>
+        <p class="hero-copy"><strong>Phases 0–8 are complete.</strong> Phase 9 now has measured contracts, security audits, protected draft workflows, independent artifact verification, channel metadata, disposable-key recovery, user guidance, and passing GrapheneOS and pinned API 35 matrices. Protected real-draft proof remains open.</p>
 
         <div class="phase-track" aria-label="Project phase progress">
           <div class="phase done"><span>Phase 0</span><strong>Foundation ✓</strong></div>
@@ -260,7 +260,8 @@
           <div class="phase done"><span>Phase 5</span><strong>Platform ✓</strong></div>
           <div class="phase done"><span>Phase 6</span><strong>Search ✓</strong></div>
           <div class="phase done"><span>Phase 7</span><strong>Themes ✓</strong></div>
-          <div class="phase current"><span>Phase 8</span><strong>Backup</strong></div>
+          <div class="phase done"><span>Phase 8</span><strong>Backup ✓</strong></div>
+          <div class="phase current"><span>Phase 9</span><strong>Hardening</strong></div>
         </div>
       </div>
     </section>
@@ -269,12 +270,12 @@
       <div class="shell">
         <div class="section-head">
           <h2 id="numbers-heading">Verified, not estimated</h2>
-          <p>Latest full runs recorded on 16 September 2026.</p>
+          <p>Latest full runs and evidence integration recorded through 18 September 2026 UTC.</p>
         </div>
         <div class="metric-grid">
-          <div class="metric"><span class="value">1,259</span><span class="label">Local JVM and Robolectric tests</span><div class="delta">0 failures · 0 errors</div></div>
-          <div class="metric"><span class="value">3,807</span><span class="label">Tasks in the authoritative build gate</span><div class="delta">Build · lint · boundaries · dependencies</div></div>
-          <div class="metric"><span class="value">130</span><span class="label">Inspected Paparazzi baselines</span><div class="delta">Light · dark · large text · rotation</div></div>
+          <div class="metric"><span class="value">1,002</span><span class="label">Tests in the diagnostic aggregate</span><div class="delta">0 failures · dependency advice repaired afterward</div></div>
+          <div class="metric"><span class="value">4,039</span><span class="label">Actionable tasks in the final build gate</span><div class="delta">47 executed · 3,992 up-to-date</div></div>
+          <div class="metric"><span class="value">365</span><span class="label">Paparazzi verification tests</span><div class="delta">No record mode · 118 baselines unchanged</div></div>
           <div class="metric"><span class="value">v7</span><span class="label">Current Room schema</span><div class="delta">Bounded app/shortcut ranking history</div></div>
         </div>
       </div>
@@ -315,7 +316,7 @@
       <div class="shell">
         <div class="section-head">
           <h2 id="capabilities-heading">Implemented capability map</h2>
-          <p>Phase 7 is complete. One resolved host-owned theme contract is consumed by every host and contribution surface.</p>
+          <p>Release hardening, authorized device measurements, final repository gates, and separate two-axis reviews pass. A protected real draft remains an explicit prerequisite rather than an inferred pass.</p>
         </div>
         <div class="capability-grid">
           <article class="card capability"><header><h3>Widget lifecycle</h3><span class="status">Ready</span></header><p>One durable ID per placement, one live view per surface, and recoverable cleanup across framework and database boundaries.</p><ul><li>Bind, configure, resize, copy, dormancy</li><li>Restart, restore, invalidation, deletion</li><li>Cancellation and rejected-commit leak checks</li></ul></article>
@@ -328,6 +329,8 @@
           <article class="card capability"><header><h3>Search privacy</h3><span class="status">Ready</span></header><p>Profile classification precedes metadata. Work badging is mandatory and ambiguous private data never enters a session or history.</p><ul><li>Permission-local denial and recovery</li><li>Immediate callback-driven result purge</li><li>App/shortcut-only bounded history</li></ul></article>
           <article class="card capability"><header><h3>Production providers</h3><span class="status">Ready</span></header><p>Nine generated-registry providers cover apps, shortcuts, commands, contacts, authorized files, Settings, GrapheneOS, web, and recovery information.</p><ul><li>Exact Settings route revalidation</li><li>Persisted SAF grants and runtime contacts</li><li>Encoded exact-host HTTPS actions</li></ul></article>
           <article class="card capability"><header><h3>Theme system</h3><span class="status">Ready</span></header><p>One host resolver supplies the immutable theme used by Material surfaces, Settings, production composition, cold restore, previews, layouts, and blocks.</p><ul><li>Built-in, Material You, Expressive, manual</li><li>Bounded fonts, icons, images, backgrounds</li><li>Explicit typed wallpaper confirmation</li></ul></article>
+          <article class="card capability"><header><h3>Backup and restore</h3><span class="status">Ready</span></header><p>Versioned bounded archives use SAF authorization, authenticated optional encryption, validation before review, and staged atomic replacement.</p><ul><li>Manual and seven-snapshot automatic inventories</li><li>Independent restore categories and recovery state</li><li>Opaque future records and exact-kind assets preserved</li></ul></article>
+          <article class="card capability"><header><h3>Release hardening</h3><span class="status">Draft blocked</span></header><p>Stable and preview have separate protected draft workflows, identities, artifacts, Obtainium metadata, and independent verification.</p><ul><li>Digest, certificate, v3 signature, and provenance checks</li><li>Security/privacy and exact dependency audits</li><li>GrapheneOS and API 35 evidence passed; protected real draft remains open</li></ul></article>
         </div>
       </div>
     </section>
@@ -335,21 +338,21 @@
     <section id="evidence" aria-labelledby="evidence-heading">
       <div class="shell">
         <div class="section-head">
-          <h2 id="evidence-heading">Device and persistence evidence</h2>
-          <p>Authority-dependent paths stay recorded as skips. Fakes never stand in for a physical-device claim.</p>
+          <h2 id="evidence-heading">Device and release evidence</h2>
+          <p>Historical device results stay labeled. Dummy keys and fixtures never stand in for a physical-device or production-release claim.</p>
         </div>
         <div class="evidence-grid">
           <article class="card evidence-card">
             <h3>Connected device matrices</h3>
             <div class="device-row">
-              <div class="device-name"><strong>AOSP API 35</strong><span>Independent post-repair run</span></div>
-              <div class="bar" aria-label="66 of 69 tests passed"><span style="width:95.65%"></span></div>
-              <div class="score"><strong>66 / 69</strong><br>3 authority skips</div>
+              <div class="device-name"><strong>AOSP API 35</strong><span>Authorized Phase 9 final run</span></div>
+              <div class="bar" aria-label="80 of 83 tests passed"><span style="width:96.39%"></span></div>
+              <div class="score"><strong>80 / 83</strong><br>3 expected skips</div>
             </div>
             <div class="device-row">
-              <div class="device-name"><strong>GrapheneOS Phase 6</strong><span>Owner supplied · not rerun</span></div>
-              <div class="bar" aria-label="44 of 47 tests passed"><span style="width:93.62%"></span></div>
-              <div class="score"><strong>44 / 47</strong><br>3 explicit skips</div>
+              <div class="device-name"><strong>GrapheneOS Phase 9</strong><span>Authorized Pixel 10a · API 37</span></div>
+              <div class="bar" aria-label="65 of 68 tests passed"><span style="width:95.59%"></span></div>
+              <div class="score"><strong>65 / 68</strong><br>3 expected skips</div>
             </div>
             <div class="device-row">
               <div class="device-name"><strong>Managed work</strong><span>Real disposable profile</span></div>
@@ -362,9 +365,9 @@
               <div class="score"><strong>1 / 1</strong><br>passed</div>
             </div>
             <div class="device-row">
-              <div class="device-name"><strong>Restoration</strong><span>GrapheneOS baseline</span></div>
-              <div class="bar" aria-label="Device restoration audit passed"><span style="width:100%"></span></div>
-              <div class="score"><strong>Exact</strong><br>hash matched</div>
+              <div class="device-name"><strong>Restoration</strong><span>GrapheneOS + API 35 baselines</span></div>
+              <div class="bar" aria-label="Device restoration audits passed"><span style="width:100%"></span></div>
+              <div class="score"><strong>Exact</strong><br>semantic match</div>
             </div>
           </article>
 
@@ -391,10 +394,10 @@
         <article class="card blocker">
           <div class="blocker-line" aria-hidden="true"></div>
           <div>
-            <h2 id="blocker-heading">Phase 7 required gates complete</h2>
-            <p>The complete theme system passes local, visual, dependency, privacy, Robolectric, and the pinned API 35 full-phone matrix. GrapheneOS results remain owner-supplied evidence reviewed, not independently rerun.</p>
+            <h2 id="blocker-heading">Phase 9 protected-draft evidence remains open</h2>
+            <p>The current GrapheneOS matrix passes on candidate <code>9d013c4b…d28289d</code>. The pinned API 35 connected and benchmark matrices pass on source fingerprint <code>7912ef41…ae8287</code>, the final repository gates pass separately on <code>f8a76ee4…40fa97f</code>, and both review axes pass on documentation-inclusive fingerprint <code>6b1337cd…0577bd88</code>. The authorized protected run is blocked by an uncommitted candidate absent from the remote, zero tags, unauthenticated GitHub CLI, and uninspectable protected configuration.</p>
           </div>
-          <a href="phase-7-theme-evidence.md">Open evidence ↗</a>
+          <a href="phase-9-release-evidence.md">Open evidence ↗</a>
         </article>
       </div>
     </section>
@@ -406,21 +409,38 @@
           <p>The status documents retain device fingerprints, restoration steps, durations, and complete results.</p>
         </div>
         <div class="command-list">
-          <details><summary>Authoritative build · 57s · passed</summary><pre>./gradlew build checkModuleBoundaries verifyNoGoogleDependencies buildHealth \
-  --no-daemon --no-configuration-cache --console=plain</pre></details>
-          <details><summary>Paparazzi · 1m56s · passed</summary><pre>./gradlew :app:verifyPaparazziStableDebug \
+          <details><summary>Phase 9 local gate · 68s · 4,038 actionable tasks · passed</summary><pre>GRADLE_USER_HOME=/tmp/quicklauncher-phase9-gradle-home \
+tools/gradle --summary --project-cache-dir /tmp/quicklauncher-phase9-project-cache \
+  build checkModuleBoundaries verifyNoGoogleDependencies buildHealth checkPhase9Performance \
+  --max-workers=1 --no-daemon --no-configuration-cache --console=plain
+# Fingerprint: f8a76ee4…40fa97f
+# Evidence: /tmp/quicklauncher-phase9-final-gates-api35/</pre></details>
+          <details><summary>Paparazzi · 21s · 365 tests / 146 PNGs unchanged · passed</summary><pre>GRADLE_USER_HOME=/tmp/quicklauncher-phase9-gradle-home \
+tools/gradle --summary --project-cache-dir /tmp/quicklauncher-phase9-project-cache \
+  :app:verifyPaparazziStableDebug \
   :modules:block:core:verifyPaparazziDebug \
   :modules:layout:core:verifyPaparazziDebug \
   :host:editor:verifyPaparazziDebug \
   :host:runtime:verifyPaparazziDebug \
   :host:settings:verifyPaparazziDebug \
-  --no-daemon --no-configuration-cache --console=plain</pre></details>
-          <details><summary>Connected matrix · API 35 · 2m39s · passed</summary><pre>ANDROID_SERIAL=emulator-5554 ./gradlew :host:data:connectedDebugAndroidTest \
-  :host:platform:connectedDebugAndroidTest \
-  :host:runtime:connectedDebugAndroidTest \
-  :host:editor:connectedDebugAndroidTest \
-  :app:connectedStableDebugAndroidTest \
-  --no-daemon --no-configuration-cache --console=plain</pre></details>
+  --max-workers=1 --no-daemon --no-configuration-cache --console=plain
+# No record mode; no mismatch.
+# Evidence: /tmp/quicklauncher-phase9-final-gates-api35/</pre></details>
+          <details><summary>License + non-Gradle · 51 dependencies · passed</summary><pre># License: 13s · all 51 exact dependencies approved.
+# Non-Gradle: ~9s · 20 security + 38 release + 32 performance tests.
+# Audits, validators, actionlint, key recovery, dummy drills, docs coherence, diff passed.
+# Dependency-health repair: debugImplementation → debugRuntimeOnly; affected gate reran successfully.
+# Evidence: /tmp/quicklauncher-phase9-final-gates-api35/</pre></details>
+          <details><summary>Phase 9 API 35 · 83 tests + 5 benchmarks · passed</summary><pre># Connected: 129s · 80/83 passed · 3 expected skips · 0 failures.
+# Benchmark: 329s · all five scenarios and all six thresholds passed.
+# Home 830.310ms · spatial CPU 22.196ms · overrun 5.845ms.
+# Catalog 84.749ms · search 251.307ms · memory 253.062MiB.
+# Exact semantic restoration; emulator killed without snapshot save and confirmed offline.
+# Evidence: /tmp/quicklauncher-phase9-api35-authorized/</pre></details>
+          <details><summary>GrapheneOS Pixel 10a · 213s · 65 / 68 passed</summary><pre># Android 17 / API 37 · build 2026091001 · patch 2026-09-01
+# Exact five-module matrix: 410 actionable tasks, 3 expected skips, 0 failures/errors.
+# Baseline/postflight semantic restoration passed; no Quicklauncher residue.
+# Evidence: /tmp/quicklauncher-phase9-grapheneos-physical/</pre></details>
         </div>
       </div>
     </section>
@@ -428,8 +448,8 @@
 
   <footer>
     <div class="shell">
-      <span>Quicklauncher current state · 16 September 2026</span>
-      <span><a href="current-state.md">Status</a> · <a href="phase-7-theme-evidence.md">Phase 7 evidence</a> · <a href="phase-6-search-evidence.md">Phase 6 evidence</a></span>
+      <span>Quicklauncher current state · 18 September 2026</span>
+      <span><a href="current-state.md">Status</a> · <a href="phase-9-release-evidence.md">Phase 9 evidence</a> · <a href="phase-9-handoff.md">Phase 9 handoff</a></span>
     </div>
   </footer>
 </body>

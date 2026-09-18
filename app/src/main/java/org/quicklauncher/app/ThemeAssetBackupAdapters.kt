@@ -6,6 +6,8 @@ import org.quicklauncher.host.backup.archive.PortableBackupSectionType
 import org.quicklauncher.host.backup.library.AuxiliaryStage
 import org.quicklauncher.host.backup.library.BackupSectionSource
 import org.quicklauncher.host.backup.library.RestoreAuxiliaryPort
+import org.quicklauncher.host.backup.library.RestoreAuxiliaryStageRequest
+import org.quicklauncher.host.backup.library.RestoreAuxiliaryValidationRequest
 import org.quicklauncher.host.backup.library.RestoreSelection
 import org.quicklauncher.host.data.store.DestinationBackgroundRecord
 import org.quicklauncher.host.data.store.LauncherSnapshot
@@ -41,30 +43,17 @@ internal class ThemeAssetBackupSectionSource(
 internal class ThemeAssetRestorePort(
     private val assets: AndroidThemeAssetStore,
 ) : RestoreAuxiliaryPort {
-    override fun validate(snapshot: LauncherSnapshot, sections: List<PortableBackupSection>): Boolean =
-        ThemeAssetArchiveConsistency.isValid(snapshot, sections)
+    override fun validate(request: RestoreAuxiliaryValidationRequest): Boolean =
+        ThemeAssetArchiveConsistency.isValid(request.snapshot, request.sections)
 
-    override suspend fun stage(sections: List<PortableBackupSection>): AuxiliaryStage =
-        stage(sections, RestoreSelection())
-
-    override suspend fun stage(
-        sections: List<PortableBackupSection>,
-        selection: RestoreSelection,
-    ): AuxiliaryStage = stageAssets(
-        sections,
-        selection,
-        ThemeAssetArchiveConsistency.availableNames(sections),
-    )
-
-    override suspend fun stage(
-        snapshot: LauncherSnapshot,
-        sections: List<PortableBackupSection>,
-        selection: RestoreSelection,
-        launcherExtensions: Map<String, ByteArray>,
-    ): AuxiliaryStage = stageAssets(
-        sections,
-        selection,
-        ThemeAssetArchiveConsistency.preservedNames(snapshot, sections, selection),
+    override suspend fun stage(request: RestoreAuxiliaryStageRequest): AuxiliaryStage = stageAssets(
+        request.sections,
+        request.selection,
+        ThemeAssetArchiveConsistency.preservedNames(
+            request.snapshot,
+            request.sections,
+            request.selection,
+        ),
     )
 
     private suspend fun stageAssets(

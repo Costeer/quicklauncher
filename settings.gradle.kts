@@ -18,6 +18,7 @@ rootProject.name = "quicklauncher"
 
 include(
     ":app",
+    ":benchmark:macrobenchmark",
     ":prototypes:nested-scroll",
     ":prototypes:platform-probe",
     ":prototypes:widget-neighbors",

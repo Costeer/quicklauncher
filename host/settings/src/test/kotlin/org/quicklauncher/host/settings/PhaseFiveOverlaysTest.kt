@@ -1,15 +1,23 @@
+@file:OptIn(androidx.compose.ui.test.ExperimentalTestApi::class)
+
 package org.quicklauncher.host.settings
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.pressKey
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -142,6 +150,87 @@ class PhaseFiveOverlaysTest {
         compose.onNodeWithText("Create", substring = false).performClick()
 
         assertEquals(listOf("Travel"), names)
+    }
+
+    @Test
+    fun `create folder dialog traverses actions and activates create from D-pad`() {
+        val names = mutableListOf<String>()
+        compose.setContent {
+            MaterialTheme {
+                CreateFolderDialog(onCreate = { names += it }, onDismiss = {})
+            }
+        }
+
+        compose.onNodeWithText("Folder name").performTextReplacement("Travel")
+        traverseAndActivate("Cancel", "Create", Key.DirectionCenter)
+
+        assertEquals(listOf("Travel"), names)
+    }
+
+    @Test
+    fun `folder overlay traverses member controls and activates move from keyboard`() {
+        val moves = mutableListOf<Pair<ContentItemId, Int>>()
+        val folder = FolderOverlayState.Open(
+            id("folder-focus"),
+            "Tools",
+            listOf(
+                FolderMemberPresentation(id("clock-focus"), "Clock", FolderMemberKind.APP, false, true, 0),
+                FolderMemberPresentation(id("mail-focus"), "Mail", FolderMemberKind.APP, false, true, 1),
+            ),
+            2,
+        )
+        compose.setContent {
+            MaterialTheme {
+                FolderOverlaySurface(
+                    folder,
+                    onActivateMember = {},
+                    onMoveMember = { member, index -> moves += member to index },
+                    onRemoveMember = {},
+                    onRename = {},
+                    onDelete = {},
+                    onClose = {},
+                )
+            }
+        }
+
+        traverseAndActivate("Clock", "Move Clock down", Key.Enter)
+
+        assertEquals(listOf(id("clock-focus") to 1), moves)
+    }
+
+    @Test
+    fun `item action overlay traverses commands and activates from D-pad`() {
+        val commands = mutableListOf<ItemActionCommand>()
+        compose.setContent {
+            MaterialTheme {
+                ItemActionOverlaySurface(
+                    ItemActionOverlayState.Open(
+                        id("mail-focus"),
+                        "Mail",
+                        ItemAvailability.AVAILABLE,
+                        setOf(ItemAction.FAVORITE, ItemAction.OPEN_DETAILS),
+                        emptySet(),
+                        emptySet(),
+                    ),
+                    { commands += it },
+                    {},
+                )
+            }
+        }
+
+        traverseAndActivate("Favorite", "App details", Key.DirectionCenter)
+
+        assertEquals(listOf(ItemActionCommand.OpenDetails), commands)
+    }
+
+    private fun traverseAndActivate(firstLabel: String, secondLabel: String, activationKey: Key) {
+        compose.onNodeWithText(firstLabel, substring = false)
+            .performSemanticsAction(SemanticsActions.RequestFocus)
+            .assertIsFocused()
+            .performKeyInput { pressKey(Key.Tab) }
+        compose.onNodeWithText(secondLabel, substring = false)
+            .assertIsFocused()
+            .performKeyInput { pressKey(activationKey) }
     }
 
     private fun id(value: String) = ContentItemId.parse("org.quicklauncher.content/$value")

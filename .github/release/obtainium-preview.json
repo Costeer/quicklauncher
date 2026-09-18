@@ -1,0 +1,9 @@
+{
+  "additionalSettings": "{\"includePrereleases\":true,\"fallbackToOlderReleases\":false,\"filterReleaseTitlesByRegEx\":\"^Quicklauncher preview v[0-9]+\\\\.[0-9]+\\\\.[0-9]+-preview(?:\\\\.[0-9]+)?$\",\"verifyLatestTag\":false,\"trackOnly\":false,\"apkFilterRegEx\":\"^quicklauncher-preview-v[0-9]+\\\\.[0-9]+\\\\.[0-9]+-preview(?:\\\\.[0-9]+)?-universal\\\\.apk$\",\"invertAPKFilter\":false,\"autoApkFilterByArch\":false,\"allowInsecure\":false}",
+  "author": "Costeer",
+  "id": "org.quicklauncher.preview",
+  "name": "Quicklauncher Preview",
+  "overrideSource": "GitHub",
+  "preferredApkIndex": 0,
+  "url": "https://github.com/Costeer/quicklauncher"
+}

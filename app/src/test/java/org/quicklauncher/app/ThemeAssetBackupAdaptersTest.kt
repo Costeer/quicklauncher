@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlinx.coroutines.test.runTest
 import org.quicklauncher.contracts.domain.ArgbColor
 import org.quicklauncher.contracts.domain.CapabilityId
 import org.quicklauncher.contracts.domain.ContributionId
@@ -13,6 +14,10 @@ import org.quicklauncher.contracts.domain.ThemeProfileId
 import org.quicklauncher.host.backup.archive.PortableBackupSection
 import org.quicklauncher.host.backup.archive.PortableBackupSectionType
 import org.quicklauncher.host.backup.library.RestoreSelection
+import org.quicklauncher.host.backup.library.AuxiliaryStage
+import org.quicklauncher.host.backup.library.RestoreAuxiliaryPort
+import org.quicklauncher.host.backup.library.RestoreAuxiliaryStageRequest
+import org.quicklauncher.host.backup.library.RestoreAuxiliaryValidationRequest
 import org.quicklauncher.host.data.store.LauncherSnapshot
 import org.quicklauncher.host.data.store.DestinationBackgroundRecord
 import org.quicklauncher.host.data.store.ThemeProfileRecord
@@ -29,6 +34,31 @@ import org.quicklauncher.host.runtime.theme.ThemeProfile
 import org.quicklauncher.host.runtime.theme.ThemeProfileCodec
 
 class ThemeAssetBackupAdaptersTest {
+    @Test
+    fun `composite staging discards acquired stages when a later port fails`() = runTest {
+        var discarded = false
+        val first = stagedPort { discarded = true }
+        val second = object : RestoreAuxiliaryPort {
+            override fun validate(request: RestoreAuxiliaryValidationRequest): Boolean = true
+
+            override suspend fun stage(request: RestoreAuxiliaryStageRequest): AuxiliaryStage =
+                error("injected staging failure")
+        }
+        val request = RestoreAuxiliaryStageRequest(
+            fixture().snapshot(),
+            emptyList(),
+            RestoreSelection(),
+            emptyMap(),
+        )
+
+        val failure = runCatching {
+            CompositeRestoreAuxiliaryPort(listOf(first, second)).stage(request)
+        }.exceptionOrNull()
+
+        assertTrue(failure is IllegalStateException)
+        assertTrue(discarded)
+    }
+
     @Test
     fun `all current profile and destination asset references require matching kinds`() {
         val fixture = fixture()
@@ -194,6 +224,17 @@ class ThemeAssetBackupAdaptersTest {
 
     private fun asset(name: ThemeAssetSectionName): PortableBackupSection =
         PortableBackupSection(PortableBackupSectionType.ASSET, name.value, byteArrayOf(1))
+
+    private fun stagedPort(discard: suspend () -> Unit): RestoreAuxiliaryPort =
+        object : RestoreAuxiliaryPort {
+            override fun validate(request: RestoreAuxiliaryValidationRequest): Boolean = true
+
+            override suspend fun stage(request: RestoreAuxiliaryStageRequest): AuxiliaryStage =
+                object : AuxiliaryStage {
+                    override suspend fun commit() = Unit
+                    override suspend fun discard() = discard.invoke()
+                }
+        }
 
     private data class Fixture(
         val profiles: List<ThemeProfileRecord>,

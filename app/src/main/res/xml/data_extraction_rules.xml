@@ -3,13 +3,19 @@
     <cloud-backup disableIfNoEncryptionCapabilities="true">
         <include domain="database" path="quicklauncher.db" />
         <include domain="file" path="datastore/launcher-preferences.pb" />
-        <include domain="file" path="theme-assets" />
+        <include domain="file" path="theme-assets/fonts" />
+        <include domain="file" path="theme-assets/images" />
+        <include domain="file" path="theme-assets/previews" />
+        <include domain="file" path="theme-assets/preserved-backup-assets.v1" />
         <include domain="sharedpref" path="portable-backup-web-adapters.xml" />
     </cloud-backup>
     <device-transfer>
         <include domain="database" path="quicklauncher.db" />
         <include domain="file" path="datastore/launcher-preferences.pb" />
-        <include domain="file" path="theme-assets" />
+        <include domain="file" path="theme-assets/fonts" />
+        <include domain="file" path="theme-assets/images" />
+        <include domain="file" path="theme-assets/previews" />
+        <include domain="file" path="theme-assets/preserved-backup-assets.v1" />
         <include domain="sharedpref" path="portable-backup-web-adapters.xml" />
     </device-transfer>
 </data-extraction-rules>

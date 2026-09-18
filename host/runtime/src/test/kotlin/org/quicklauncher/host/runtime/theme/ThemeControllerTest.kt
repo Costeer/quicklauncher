@@ -13,6 +13,7 @@ import org.junit.rules.TemporaryFolder
 import org.quicklauncher.contracts.contribution.ConfigurationDocument
 import org.quicklauncher.contracts.contribution.EncodedConfiguration
 import org.quicklauncher.contracts.domain.ArgbColor
+import org.quicklauncher.contracts.domain.CapabilityId
 import org.quicklauncher.contracts.domain.ConfigTypeId
 import org.quicklauncher.contracts.domain.ConfigurationDocumentId
 import org.quicklauncher.contracts.domain.ContributionId
@@ -158,7 +159,7 @@ class ThemeControllerTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         val preferences = FileLauncherPreferencesStore.open(file, dispatcher)
         val orphan = StableKey.parse("interrupted-restore-orphan")
-        var referencedAtCleanup: Set<StableKey>? = null
+        var referencedAtCleanup: Set<ThemeAssetIdentity>? = null
         val controller = ThemeController(
             InMemoryLauncherStore(),
             preferences,
@@ -170,7 +171,41 @@ class ThemeControllerTest {
 
         controller.start()
 
-        assertEquals(emptySet<StableKey>(), referencedAtCleanup)
+        assertEquals(emptySet<ThemeAssetIdentity>(), referencedAtCleanup)
+        controller.close()
+        preferences.close()
+    }
+
+    @Test
+    fun `cleanup retains fonts referenced only by module overrides`() = runTest {
+        val file = File(temporaryFolder.root, "override-font-cleanup-preferences.pb")
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val preferences = FileLauncherPreferencesStore.open(file, dispatcher)
+        val module = ContributionId.parse("org.quicklauncher.block/override-font-test")
+        val capability = CapabilityId.parse("org.quicklauncher.capability/theme-font")
+        val font = StableKey.parse("override-font-only")
+        var referencedAtCleanup = emptySet<ThemeAssetIdentity>()
+        val controller = ThemeController(
+            InMemoryLauncherStore(),
+            preferences,
+            mapOf(module to setOf(capability)),
+            cleanupAssets = { referencedAtCleanup = it },
+            parentScope = this,
+        )
+        val profile = ThemeProfile(
+            ThemeProfileId.parse("org.quicklauncher.theme/override-font-cleanup"),
+            "Override font cleanup",
+            mode = ThemeModePolicy.FOLLOW_SYSTEM,
+            palette = PaletteDefinition.BuiltIn,
+            overrides = listOf(
+                ModuleThemeOverride(module, capability, null, FontSelection(font)),
+            ),
+        )
+
+        controller.start()
+        assertTrue(controller.save(profile, select = false) is ThemeMutationResult.Applied)
+
+        assertTrue(ThemeAssetIdentity(font, ThemeAssetKind.FONT) in referencedAtCleanup)
         controller.close()
         preferences.close()
     }

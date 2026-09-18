@@ -7,3 +7,22 @@ local.properties
 captures/
 .externalNativeBuild/
 .cxx/
+__pycache__/
+*.py[cod]
+
+# Production signing material must never enter the worktree.
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+*.pk8
+*.p8
+id_rsa
+id_ed25519
+keystore.properties
+signing.properties
+secrets.properties
+.env
+.env.*

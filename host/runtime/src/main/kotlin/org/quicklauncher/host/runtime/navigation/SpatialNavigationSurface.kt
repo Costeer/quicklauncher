@@ -1,6 +1,7 @@
 package org.quicklauncher.host.runtime.navigation
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.DurationBasedAnimationSpec
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.focusable
@@ -152,7 +153,7 @@ fun SpatialNavigationSurface(
     if (activeDirection != null) displayedDirection = activeDirection
     val displayedProgress by animateFloatAsState(
         targetValue = state.frame.drag?.progress ?: 0f,
-        animationSpec = if (reducedMotion) snap() else tween(SpatialNavigationMotion.SETTLE_DURATION_MILLIS),
+        animationSpec = SpatialNavigationMotion.settleAnimationSpec(reducedMotion),
         label = "destination preview",
     )
 
@@ -231,8 +232,8 @@ fun SpatialNavigationSurface(
 object SpatialNavigationMotion {
     const val SETTLE_DURATION_MILLIS: Int = 160
 
-    fun settleDurationMillis(reducedMotion: Boolean): Int =
-        if (reducedMotion) 0 else SETTLE_DURATION_MILLIS
+    internal fun settleAnimationSpec(reducedMotion: Boolean): DurationBasedAnimationSpec<Float> =
+        if (reducedMotion) snap() else tween(SETTLE_DURATION_MILLIS)
 }
 
 private fun Modifier.nonInteractivePreview(): Modifier =

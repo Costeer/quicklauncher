@@ -1,5 +1,6 @@
 package org.quicklauncher.host.settings
 
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -48,6 +49,7 @@ import org.quicklauncher.host.runtime.theme.IconPackSelection
 import org.quicklauncher.host.runtime.theme.ThemeFontRole
 import org.quicklauncher.host.runtime.theme.WallpaperCrop
 import org.quicklauncher.host.runtime.theme.WallpaperTarget
+import org.quicklauncher.host.runtime.navigation.PredictiveBackCommitPolicy
 import org.quicklauncher.host.runtime.RecoveryInstance
 import org.quicklauncher.host.runtime.permissions.HomeRoleState
 import org.quicklauncher.host.runtime.notifications.NotificationAccessState
@@ -981,6 +983,11 @@ fun MapOverviewSurface(
     modifier: Modifier = Modifier,
 ) {
     var creatingFolder by remember { mutableStateOf(false) }
+    PredictiveBackHandler(enabled = creatingFolder) { progress ->
+        PredictiveBackCommitPolicy.collect(progress) {
+            creatingFolder = false
+        }
+    }
     OverlayScaffold(stringResource(R.string.map_title), onClose, modifier) { contentModifier ->
         LazyColumn(
             modifier = contentModifier,

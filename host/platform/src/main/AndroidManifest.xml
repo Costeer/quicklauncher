@@ -1,5 +1,11 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- Complete local launcher search requires visibility of every launchable app; see ADR 0009. -->
+    <uses-permission
+        android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.SET_WALLPAPER" />
     <queries>
         <intent>
@@ -9,6 +15,9 @@
     </queries>
 
     <application>
+        <activity
+            android:name="androidx.activity.ComponentActivity"
+            tools:node="remove" />
         <activity
             android:name=".widgets.WidgetConfigurationActivity"
             android:excludeFromRecents="true"

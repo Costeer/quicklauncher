@@ -80,8 +80,15 @@ sealed interface ImageImportResult {
 interface ThemeAssetInventory {
     suspend fun fontAssets(): Set<StableKey>
     suspend fun imageAssets(): Set<StableKey>
-    suspend fun deleteUnreferenced(referenced: Set<StableKey>)
+    suspend fun deleteUnreferenced(referenced: Set<ThemeAssetIdentity>)
 }
+
+enum class ThemeAssetKind { FONT, IMAGE, PREVIEW }
+
+data class ThemeAssetIdentity(
+    val id: StableKey,
+    val kind: ThemeAssetKind,
+)
 
 enum class WallpaperTarget {
     HOME,

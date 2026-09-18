@@ -6,6 +6,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
@@ -16,6 +17,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performCustomAccessibilityActionWithLabel
 import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -28,6 +30,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.quicklauncher.contracts.contribution.ActiveCancellationSignal
+import org.quicklauncher.contracts.contribution.BlockSession
 import org.quicklauncher.contracts.contribution.ContributionContext
 import org.quicklauncher.contracts.domain.ContentItemId
 import org.quicklauncher.contracts.domain.ContributionId
@@ -105,6 +108,97 @@ class CoreBlocksComposeTest {
                 BlockAction.OpenSettings(instanceId),
             ),
             actions,
+        )
+    }
+
+    @Test
+    fun `alphabetical block traverses logical focus and activates from keyboard and D-pad`() {
+        val instanceId = ModuleInstanceId.parse("org.quicklauncher.instance/alphabetical-focus-test")
+        val items = listOf(item("alpha-focus", "Alpha"), item("beta-focus", "Beta"))
+        assertItemFocusAndKeyActivation(
+            AlphabeticalAppsBlock.open(
+                ContributionContext(instanceId, AlphabeticalAppsCodec.default, ActiveCancellationSignal, scope),
+            ),
+            instanceId,
+            items,
+            "Alpha",
+            "Beta",
+            Key.DirectionDown,
+        )
+    }
+
+    @Test
+    fun `app grid traverses logical focus and activates from keyboard and D-pad`() {
+        val instanceId = ModuleInstanceId.parse("org.quicklauncher.instance/app-grid-focus-test")
+        val items = listOf(item("grid-alpha", "Grid alpha"), item("grid-beta", "Grid beta"))
+        assertItemFocusAndKeyActivation(
+            AppGridBlock.open(
+                ContributionContext(instanceId, AppGridCodec.default, ActiveCancellationSignal, scope),
+            ),
+            instanceId,
+            items,
+            "Grid alpha",
+            "Grid beta",
+            Key.DirectionRight,
+        )
+    }
+
+    @Test
+    fun `favorites traverse logical focus and activate from keyboard and D-pad`() {
+        val instanceId = ModuleInstanceId.parse("org.quicklauncher.instance/favorites-focus-test")
+        val items = listOf(item("favorite-alpha", "Favorite alpha"), item("favorite-beta", "Favorite beta"))
+        assertItemFocusAndKeyActivation(
+            FavoritesBlock.open(
+                ContributionContext(instanceId, FavoritesCodec.default, ActiveCancellationSignal, scope),
+            ),
+            instanceId,
+            items,
+            "Favorite alpha",
+            "Favorite beta",
+            Key.DirectionRight,
+        )
+    }
+
+    @Test
+    fun `folder block traverses logical focus and activates from keyboard and D-pad`() {
+        val instanceId = ModuleInstanceId.parse("org.quicklauncher.instance/folder-focus-test")
+        val items = listOf(
+            item("folder-alpha", "Folder alpha", PreparedContentKind.FOLDER),
+            item("folder-beta", "Folder beta", PreparedContentKind.FOLDER),
+        )
+        assertItemFocusAndKeyActivation(
+            FolderBlock.open(
+                ContributionContext(instanceId, FolderCodec.default, ActiveCancellationSignal, scope),
+            ),
+            instanceId,
+            items,
+            "Folder alpha, folder",
+            "Folder beta, folder",
+            Key.DirectionRight,
+        )
+    }
+
+    @Test
+    fun `actionable clock date items traverse logical focus and activate from keyboard and D-pad`() {
+        val instanceId = ModuleInstanceId.parse("org.quicklauncher.instance/clock-date-focus-test")
+        val items = listOf(
+            item("clock-focus", "Clock", PreparedContentKind.TEXT),
+            item("date-focus", "Date", PreparedContentKind.TEXT),
+        )
+        assertItemFocusAndKeyActivation(
+            ClockDateBlock.open(
+                ContributionContext(
+                    instanceId,
+                    ClockDateConfiguration(showDate = true),
+                    ActiveCancellationSignal,
+                    scope,
+                ),
+            ),
+            instanceId,
+            items,
+            "Clock",
+            "Date",
+            Key.DirectionDown,
         )
     }
 
@@ -359,11 +453,55 @@ class CoreBlocksComposeTest {
         )
     }
 
-    private fun item(id: String, label: String) = PreparedContentItem(
+    private fun assertItemFocusAndKeyActivation(
+        session: BlockSession,
+        instanceId: ModuleInstanceId,
+        items: List<PreparedContentItem>,
+        firstDescription: String,
+        secondDescription: String,
+        traversalKey: Key,
+    ) {
+        val actions = mutableListOf<BlockAction>()
+        compose.setContent {
+            session.Render(
+                BlockRenderInput(
+                    instanceId,
+                    state(items, CompositionState(CompositionRole.CURRENT, isInteractive = true)),
+                    EmptySlotRenderer,
+                    RecordingContentRenderer(mutableListOf()),
+                    ActionSink { action -> actions += action; ActionDispatchResult.Accepted },
+                ),
+            )
+        }
+
+        compose.onNodeWithContentDescription(firstDescription)
+            .performSemanticsAction(SemanticsActions.RequestFocus)
+            .assertIsFocused()
+            .performKeyInput { pressKey(Key.Enter) }
+            .performKeyInput { pressKey(traversalKey) }
+        compose.onNodeWithContentDescription(secondDescription)
+            .assertIsFocused()
+            .performKeyInput { pressKey(Key.DirectionCenter) }
+
+        assertEquals(
+            listOf(
+                BlockAction.ActivateItem(items[0].id),
+                BlockAction.ActivateItem(items[1].id),
+            ),
+            actions,
+        )
+        session.close()
+    }
+
+    private fun item(
+        id: String,
+        label: String,
+        kind: PreparedContentKind = PreparedContentKind.APP,
+    ) = PreparedContentItem(
         ContentItemId.parse("org.quicklauncher.content/$id"),
         label,
         null,
-        PreparedContentKind.APP,
+        kind,
         enabled = true,
     )
 

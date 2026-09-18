@@ -14,6 +14,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.quicklauncher.contracts.domain.StableKey
+import org.quicklauncher.host.runtime.theme.ThemeAssetIdentity
+import org.quicklauncher.host.runtime.theme.ThemeAssetKind
 import org.quicklauncher.host.runtime.theme.WallpaperCrop
 import org.quicklauncher.host.runtime.theme.WallpaperPlatformResult
 import org.quicklauncher.host.runtime.theme.WallpaperTarget
@@ -124,9 +126,29 @@ class AndroidThemeAssetStoreRobolectricTest {
         recreated.deleteUnreferenced(emptySet())
         assertTrue(id in recreated.imageAssets())
 
-        recreated.deleteUnreferenced(setOf(id))
+        recreated.deleteUnreferenced(setOf(ThemeAssetIdentity(id, ThemeAssetKind.IMAGE)))
         recreated.deleteUnreferenced(emptySet())
         assertFalse(id in recreated.imageAssets())
+    }
+
+    @Test
+    fun `a current reference of another kind does not consume opaque asset preservation`() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val id = StableKey.parse("future-cross-kind-${UUID.randomUUID().toString().replace("-", "")}")
+        val assets = AndroidThemeAssetStore(context)
+        val staged = requireNotNull(
+            assets.stageBackupAssets(
+                listOf(ThemeAssetBackupEntry(id, ThemeAssetBackupKind.IMAGE, testPng())),
+                setOf(ThemeAssetBackupIdentity(id, ThemeAssetBackupKind.IMAGE)),
+            ),
+        )
+        assertTrue(staged.commit())
+
+        val recreated = AndroidThemeAssetStore(context)
+        recreated.deleteUnreferenced(setOf(ThemeAssetIdentity(id, ThemeAssetKind.PREVIEW)))
+        recreated.deleteUnreferenced(emptySet())
+
+        assertTrue(id in recreated.imageAssets())
     }
 
     private fun testPng(): ByteArray {

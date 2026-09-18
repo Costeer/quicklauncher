@@ -9,6 +9,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 plugins {
     alias(libs.plugins.android.application) apply false
     alias(libs.plugins.android.library) apply false
+    alias(libs.plugins.android.test) apply false
     alias(libs.plugins.kotlin.android) apply false
     alias(libs.plugins.kotlin.compose) apply false
     alias(libs.plugins.kotlin.jvm) apply false
@@ -262,6 +263,30 @@ tasks.register("checkModuleBoundaries") {
                 frameworkLeaks.joinToString("\n") { " - $it" }
         }
     }
+}
+
+val checkPhase9PerformanceTools = tasks.register<Exec>("checkPhase9PerformanceTools") {
+    group = "verification"
+    description = "Runs the offline Phase 9 performance verifier and dependency-audit tests."
+    commandLine(
+        "python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        rootProject.file("tools/performance/tests"),
+        "-v",
+    )
+}
+
+tasks.register("checkPhase9Performance") {
+    group = "verification"
+    description = "Runs all device-independent Phase 9 performance contract gates."
+    dependsOn(
+        checkPhase9PerformanceTools,
+        ":benchmark:macrobenchmark:checkBenchmarkDependencyLicenses",
+        ":host:runtime:testDebugUnitTest",
+    )
 }
 
 tasks.register("verifyNoGoogleDependencies") {

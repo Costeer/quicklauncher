@@ -1,0 +1,10 @@
+{
+  "context": {"build": {"fingerprint": "aosp/test/device", "model": "emulator", "version": {"sdk": 35}}},
+  "benchmarks": [
+    {"name": "homeEntry", "repeatIterations": 10, "thermalThrottleSleepSeconds": 0, "metrics": {"timeToInitialDisplayMs": {"runs": [900, 920, 940, 960, 980, 1000, 1020, 1040, 1060, 1080]}}},
+    {"name": "spatialGesture", "repeatIterations": 1, "thermalThrottleSleepSeconds": 0, "sampledMetrics": {"frameDurationCpuMs": {"runs": [[12, 15, 18, 20]]}, "frameOverrunMs": {"runs": [[-3, 0, 2, 4]]}}},
+    {"name": "appCatalogLoading", "repeatIterations": 10, "thermalThrottleSleepSeconds": 0, "metrics": {"catalogReadyFirstMs": {"runs": [100, 101, 102, 103, 104, 105, 106, 107, 108, 109]}}},
+    {"name": "searchFirstResult", "repeatIterations": 10, "thermalThrottleSleepSeconds": 0, "metrics": {"searchReadyFirstMs": {"runs": [80, 81, 82, 83, 84, 85, 86, 87, 88, 89]}}},
+    {"name": "currentPlusNeighborsMemory", "repeatIterations": 10, "thermalThrottleSleepSeconds": 0, "metrics": {"memoryRssAnonMaxKb": {"runs": [100000,100000,100000,100000,100000,100000,100000,100000,100000,100000]}, "memoryRssFileMaxKb": {"runs": [20000,20000,20000,20000,20000,20000,20000,20000,20000,20000]}, "memoryRssShmemMaxKb": {"runs": [1000,1000,1000,1000,1000,1000,1000,1000,1000,1000]}}}
+  ]
+}

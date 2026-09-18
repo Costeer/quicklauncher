@@ -4,6 +4,7 @@ import java.security.MessageDigest
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import java.util.Collections
 import java.util.UUID
 import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.CancellationException
@@ -84,30 +85,37 @@ object SystemBackupClock : BackupClock {
     override fun nowEpochMillis(): Long = System.currentTimeMillis()
 }
 
-/** Allows imported private assets to be staged without exposing a filesystem to the coordinator. */
+/** Immutable complete context for validating auxiliary archive payloads during preview. */
+class RestoreAuxiliaryValidationRequest(
+    val snapshot: LauncherSnapshot,
+    sections: Collection<PortableBackupSection>,
+    launcherExtensions: Map<String, ByteArray>,
+) {
+    val sections: List<PortableBackupSection> = Collections.unmodifiableList(sections.toList())
+    private val launcherExtensions = launcherExtensions.mapValues { it.value.copyOf() }
+
+    fun launcherExtensionsCopy(): Map<String, ByteArray> =
+        launcherExtensions.mapValues { it.value.copyOf() }
+}
+
+/** Immutable complete context for staging the user's selected auxiliary restore payloads. */
+class RestoreAuxiliaryStageRequest(
+    val snapshot: LauncherSnapshot,
+    sections: Collection<PortableBackupSection>,
+    val selection: RestoreSelection,
+    launcherExtensions: Map<String, ByteArray>,
+) {
+    val sections: List<PortableBackupSection> = Collections.unmodifiableList(sections.toList())
+    private val launcherExtensions = launcherExtensions.mapValues { it.value.copyOf() }
+
+    fun launcherExtensionsCopy(): Map<String, ByteArray> =
+        launcherExtensions.mapValues { it.value.copyOf() }
+}
+
+/** Validates and stages auxiliary restore state without exposing its storage implementation. */
 interface RestoreAuxiliaryPort {
-    fun validate(snapshot: LauncherSnapshot, sections: List<PortableBackupSection>): Boolean = true
-    fun validate(
-        snapshot: LauncherSnapshot,
-        sections: List<PortableBackupSection>,
-        launcherExtensions: Map<String, ByteArray>,
-    ): Boolean = validate(snapshot, sections)
-    suspend fun stage(sections: List<PortableBackupSection>): AuxiliaryStage
-    suspend fun stage(
-        sections: List<PortableBackupSection>,
-        selection: RestoreSelection,
-    ): AuxiliaryStage = stage(sections)
-    suspend fun stage(
-        sections: List<PortableBackupSection>,
-        selection: RestoreSelection,
-        launcherExtensions: Map<String, ByteArray>,
-    ): AuxiliaryStage = stage(sections, selection)
-    suspend fun stage(
-        snapshot: LauncherSnapshot,
-        sections: List<PortableBackupSection>,
-        selection: RestoreSelection,
-        launcherExtensions: Map<String, ByteArray>,
-    ): AuxiliaryStage = stage(sections, selection, launcherExtensions)
+    fun validate(request: RestoreAuxiliaryValidationRequest): Boolean
+    suspend fun stage(request: RestoreAuxiliaryStageRequest): AuxiliaryStage
 }
 
 interface AuxiliaryStage {
@@ -116,7 +124,9 @@ interface AuxiliaryStage {
 }
 
 object EmptyRestoreAuxiliaryPort : RestoreAuxiliaryPort {
-    override suspend fun stage(sections: List<PortableBackupSection>): AuxiliaryStage = object : AuxiliaryStage {
+    override fun validate(request: RestoreAuxiliaryValidationRequest): Boolean = true
+
+    override suspend fun stage(request: RestoreAuxiliaryStageRequest): AuxiliaryStage = object : AuxiliaryStage {
         override suspend fun commit() = Unit
         override suspend fun discard() = Unit
     }
@@ -324,7 +334,9 @@ class PortableBackupLibrary(
             requireNotNull(payload.extensionCopy(name))
         }
         val auxiliaryValid = try {
-            auxiliaryPort.validate(payload.snapshot, archive.sections, launcherExtensions)
+            auxiliaryPort.validate(
+                RestoreAuxiliaryValidationRequest(payload.snapshot, archive.sections, launcherExtensions),
+            )
         } catch (_: RuntimeException) {
             false
         }
@@ -407,18 +419,20 @@ class PortableBackupLibrary(
         }
         val auxiliary = try {
             auxiliaryPort.stage(
-                staged.importedSnapshot,
-                selectedAuxiliary,
-                selection,
-                if (selection.launcherMap) staged.launcherExtensionsCopy() else emptyMap(),
+                RestoreAuxiliaryStageRequest(
+                    staged.importedSnapshot,
+                    selectedAuxiliary,
+                    selection,
+                    if (selection.launcherMap) staged.launcherExtensionsCopy() else emptyMap(),
+                ),
             )
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
             return BackupOperationResult.Failed(BackupLibraryProblem.AUXILIARY_IMPORT_FAILED)
         }
-        coroutineContext.ensureActive()
         try {
+            coroutineContext.ensureActive()
             auxiliary.commit()
         } catch (cancelled: CancellationException) {
             discardAuxiliary(auxiliary)

@@ -37,7 +37,18 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
+        }
+        create("benchmark") {
+            initWith(getByName("release"))
+            matchingFallbacks += listOf("release")
+            signingConfig = signingConfigs.getByName("debug")
+            isDebuggable = false
         }
     }
 
@@ -82,11 +93,15 @@ dependencies {
     implementation(libs.androidx.compose.ui.unit)
     implementation(libs.kotlinx.coroutines.core)
 
+    debugRuntimeOnly(libs.androidx.compose.ui.test.manifest)
+
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation("com.android.tools.layoutlib:layoutlib-api:31.11.0-rc02")
 
     androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation("androidx.annotation:annotation:1.9.1")
+    androidTestImplementation("androidx.test:core:1.7.0")
     androidTestImplementation(libs.androidx.test.monitor)
     androidTestImplementation(libs.androidx.test.uiautomator)
     androidTestImplementation(platform(libs.androidx.compose.bom))
@@ -95,6 +110,16 @@ dependencies {
     androidTestImplementation(libs.junit)
     androidTestImplementation("org.jspecify:jspecify:1.0.0")
     androidTestImplementation(libs.androidx.test.runner)
+}
+
+androidComponents {
+    beforeVariants(
+        selector()
+            .withFlavor("channel" to "preview")
+            .withBuildType("benchmark"),
+    ) { variant ->
+        variant.enable = false
+    }
 }
 
 licensee {

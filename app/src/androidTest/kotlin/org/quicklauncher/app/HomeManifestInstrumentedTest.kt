@@ -32,6 +32,27 @@ import org.quicklauncher.host.runtime.profile.ProfileKind
 @RunWith(AndroidJUnit4::class)
 class HomeManifestInstrumentedTest {
     @Test
+    fun completeLauncherDeclaresBroadPackageVisibilityForTheAppCatalog() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val requestedPermissions = context.packageManager.getPackageInfo(
+            context.packageName,
+            PackageManager.PackageInfoFlags.of(PackageManager.GET_PERMISSIONS.toLong()),
+        ).requestedPermissions?.toSet().orEmpty()
+
+        assertTrue(
+            "The complete launcher app catalog requires explicit broad package visibility",
+            android.Manifest.permission.QUERY_ALL_PACKAGES in requestedPermissions,
+        )
+        assertEquals(
+            PackageManager.PERMISSION_GRANTED,
+            context.packageManager.checkPermission(
+                android.Manifest.permission.QUERY_ALL_PACKAGES,
+                context.packageName,
+            ),
+        )
+    }
+
+    @Test
     fun completePrivateSpaceLauncherDeclaresHiddenProfileAccess() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         assertEquals(
@@ -130,9 +151,14 @@ class HomeManifestInstrumentedTest {
         val roleManager = context.getSystemService(RoleManager::class.java)
         val originalHolders = roleHolders()
         try {
-            setOnboardingState(org.quicklauncher.host.data.preferences.OnboardingState.IN_PROGRESS)
             HomeEntryRecorder.resetForTests()
             removeOwnRole()
+            finishQuicklauncherActivities()
+            assertTrue(
+                "Quicklauncher activity did not stop before onboarding setup",
+                waitForNoQuicklauncherActivity(),
+            )
+            setOnboardingState(org.quicklauncher.host.data.preferences.OnboardingState.IN_PROGRESS)
             launchFromAppIcon()
             val appIconActivity = HomeEntryRecorder.snapshot().activityInstanceId
             requireNotNull(
@@ -140,7 +166,7 @@ class HomeManifestInstrumentedTest {
                     By.text(context.getString(org.quicklauncher.host.runtime.R.string.use_as_home)),
                     TIMEOUT,
                 ),
-            ).click()
+            ) { onboardingDiagnostics() }.click()
             assertTrue(
                 "The production Home-role flow did not acquire ownership",
                 completeHomeRoleGrant(roleManager),
@@ -175,15 +201,20 @@ class HomeManifestInstrumentedTest {
             ),
         ).activityInfo.packageName
         try {
-            setOnboardingState(org.quicklauncher.host.data.preferences.OnboardingState.IN_PROGRESS)
             removeOwnRole()
+            finishQuicklauncherActivities()
+            assertTrue(
+                "Quicklauncher activity did not stop before onboarding setup",
+                waitForNoQuicklauncherActivity(),
+            )
+            setOnboardingState(org.quicklauncher.host.data.preferences.OnboardingState.IN_PROGRESS)
             launchFromAppIcon()
             requireNotNull(
                 waitForEnabled(
                     By.text(context.getString(org.quicklauncher.host.runtime.R.string.use_as_home)),
                     TIMEOUT,
                 ),
-            ).click()
+            ) { onboardingDiagnostics() }.click()
             assertTrue(
                 "The platform Home-role request did not open",
                 device.wait(
@@ -217,26 +248,37 @@ class HomeManifestInstrumentedTest {
         setOnboardingState(org.quicklauncher.host.data.preferences.OnboardingState.COMPLETED)
         HomeEntryRecorder.resetForTests()
         launchFromAppIcon()
-        val settings = device.wait(
-            Until.findObject(
-                By.desc(context.getString(org.quicklauncher.host.runtime.R.string.launcher_settings)),
-            ),
+        val settings = waitForEnabled(
+            By.desc(context.getString(org.quicklauncher.host.runtime.R.string.launcher_settings)),
             TIMEOUT,
         )
         requireNotNull(settings) {
             "Launcher settings were absent from ${device.currentPackageName}: ${visibleSemantics()}"
         }.click()
         requireNotNull(
-            device.wait(
-                Until.findObject(
-                    By.text(context.getString(org.quicklauncher.host.settings.R.string.open_app_recovery)),
-                ),
+            waitForEnabled(
+                By.text(context.getString(org.quicklauncher.host.settings.R.string.open_app_recovery)),
                 TIMEOUT,
             ),
         ).click()
         requireNotNull(
-            device.wait(Until.findObject(By.text(context.getString(R.string.app_name))), TIMEOUT),
-        ).click()
+            device.wait(
+                Until.findObject(
+                    By.text(context.getString(org.quicklauncher.host.settings.R.string.app_recovery_title)),
+                ),
+                TIMEOUT,
+            ),
+        ) {
+            "App recovery did not open after activating its launcher Settings action"
+        }
+        requireNotNull(
+            findByScrolling(
+                By.text(context.getString(R.string.app_name)),
+                attempts = 24,
+            )?.takeIf { it.isEnabled },
+        ) {
+            "Quicklauncher was absent from the virtualized app recovery catalog"
+        }.click()
         instrumentation.waitForIdleSync()
         assertTrue(HomeEntryRecorder.snapshot().appIconEntries > 0)
     }
@@ -274,6 +316,16 @@ class HomeManifestInstrumentedTest {
     }
 
     private fun completeOnboardingIfNeeded() {
+        val application = context.applicationContext as QuicklauncherApplication
+        val onboardingState = runBlocking {
+            requireNotNull(application.launcherPreferences).read().onboardingState
+        }
+        if (onboardingState == org.quicklauncher.host.data.preferences.OnboardingState.IN_PROGRESS) {
+            requireNotNull(waitForEnabled(By.text("Use Quicklauncher as Home"), TIMEOUT)) {
+                onboardingDiagnostics()
+            }
+            return
+        }
         if (waitForEnabled(By.text("Use Quicklauncher as Home"), 250L) != null) return
         val preview = findTextByScrolling("Preview configured Modular", attempts = 6) ?: return
         preview.click()
@@ -292,8 +344,18 @@ class HomeManifestInstrumentedTest {
         }
         install.click()
         requireNotNull(waitForEnabled(By.text("Use Quicklauncher as Home"), TIMEOUT)) {
-            "Onboarding did not install the selected plan"
+            "Onboarding did not install the selected plan: ${onboardingDiagnostics()}"
         }
+    }
+
+    private fun onboardingDiagnostics(): String {
+        val application = context.applicationContext as QuicklauncherApplication
+        val onboardingState = runBlocking {
+            requireNotNull(application.launcherPreferences).read().onboardingState
+        }
+        return "Home action unavailable: onboarding=$onboardingState, " +
+            "holders=${roleHolders()}, foreground=${device.currentPackageName}, " +
+            "runtime=${HomeEntryRecorder.snapshot()}, visible=${visibleSemantics()}"
     }
 
     private fun setOnboardingState(state: org.quicklauncher.host.data.preferences.OnboardingState) {
@@ -409,6 +471,25 @@ class HomeManifestInstrumentedTest {
                 .forEach(MainActivity::finishAndRemoveTask)
         }
         instrumentation.waitForIdleSync()
+    }
+
+    private fun waitForNoQuicklauncherActivity(): Boolean {
+        val deadline = SystemClock.uptimeMillis() + TIMEOUT
+        do {
+            var count = Int.MAX_VALUE
+            instrumentation.runOnMainSync {
+                val monitor = ActivityLifecycleMonitorRegistry.getInstance()
+                count = Stage.entries
+                    .filterNot { stage -> stage == Stage.DESTROYED }
+                    .flatMap { stage -> monitor.getActivitiesInStage(stage) }
+                    .filterIsInstance<MainActivity>()
+                    .toSet()
+                    .size
+            }
+            if (count == 0) return true
+            SystemClock.sleep(50L)
+        } while (SystemClock.uptimeMillis() < deadline)
+        return false
     }
 
     private fun waitForHomeEntryAfter(appIconActivity: Int): Boolean {

@@ -1,0 +1,303 @@
+name: Draft stable release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing stable tag (vMAJOR.MINOR.PATCH)
+        required: true
+        type: string
+
+concurrency:
+  group: release-stable
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    name: Stable tag preflight
+    runs-on: ubuntu-latest
+    outputs:
+      commit: ${{ steps.tag.outputs.commit }}
+    steps:
+      - name: Check out the requested tag
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          ref: ${{ format('refs/tags/{0}', inputs.tag) }}
+
+      - name: Prove stable tag checkout
+        id: tag
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test "$GITHUB_REF" = "refs/tags/$RELEASE_TAG"
+          tag_commit="$(git rev-list -n 1 "refs/tags/$RELEASE_TAG")"
+          test "$tag_commit" = "$GITHUB_SHA"
+          test "$(git status --porcelain --untracked-files=all)" = ""
+          echo "commit=$tag_commit" >> "$GITHUB_OUTPUT"
+
+  gates:
+    name: Stable pre-sign gates
+    needs: preflight
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the proven tag
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.preflight.outputs.commit }}
+
+      - name: Prove immutable stable source
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          SOURCE_COMMIT: ${{ needs.preflight.outputs.commit }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
+          git fetch --force --no-tags origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+          test "$(git rev-list -n 1 "refs/tags/$RELEASE_TAG")" = "$SOURCE_COMMIT"
+
+      - name: Set up Java 17
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+
+      - name: Install pinned Android SDK
+        run: sdkmanager "platforms;android-36" "build-tools;35.0.0"
+
+      - name: Run complete local release gates and build unsigned APK
+        run: |
+          set -euo pipefail
+          mapfile -t license_tasks < <(rg -o ':[A-Za-z0-9:_-]+:licensee' .github/workflows/ci.yml | sort -u)
+          tools/gradle --summary \
+            check \
+            checkModuleBoundaries \
+            verifyNoGoogleDependencies \
+            buildHealth \
+            checkPhase9Performance \
+            :benchmark:macrobenchmark:checkBenchmarkDependencyLicenses \
+            :app:verifyPaparazziStableDebug \
+            :modules:block:core:verifyPaparazziDebug \
+            :modules:layout:core:verifyPaparazziDebug \
+            :host:editor:verifyPaparazziDebug \
+            :host:runtime:verifyPaparazziDebug \
+            :host:settings:verifyPaparazziDebug \
+            :app:assembleStableRelease \
+            :app:lintStableRelease \
+            :app:testStableReleaseUnitTest \
+            "${license_tasks[@]}" \
+            --no-daemon \
+            --no-configuration-cache \
+            --console=plain
+
+      - name: Run release policy gates
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s tools/security -t . -v
+          python3 -m unittest discover -s tools/release -t . -v
+          python3 tools/security/release_security_audit.py \
+            --stable-manifest app/build/intermediates/merged_manifests/stableRelease/processStableReleaseManifest/AndroidManifest.xml \
+            --preview-manifest app/build/intermediates/merged_manifests/previewRelease/processPreviewReleaseManifest/AndroidManifest.xml
+          python3 tools/release/validate_channels.py
+          python3 tools/release/validate_workflows.py
+          python3 tools/performance/audit_benchmark_dependencies.py \
+            --resolved benchmark/macrobenchmark/build/reports/licenses/stable-benchmark-dependencies.txt \
+            --allowlist tools/performance/benchmark-dependency-licenses.txt
+          mkdir -p "$RUNNER_TEMP/actionlint-bin"
+          GOBIN="$RUNNER_TEMP/actionlint-bin" go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+          "$RUNNER_TEMP/actionlint-bin/actionlint" \
+            .github/workflows/ci.yml \
+            .github/workflows/release-stable.yml \
+            .github/workflows/release-preview.yml
+          test -f app/build/outputs/apk/stable/release/app-stable-release-unsigned.apk
+
+      - name: Upload unsigned stable APK for protected signing
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: unsigned-stable-${{ needs.preflight.outputs.commit }}
+          path: app/build/outputs/apk/stable/release/app-stable-release-unsigned.apk
+          if-no-files-found: error
+          retention-days: 1
+
+  sign-and-draft:
+    name: Sign, attest, draft, and redownload stable APK
+    needs: [preflight, gates]
+    runs-on: ubuntu-latest
+    environment: release-stable
+    permissions:
+      attestations: write
+      contents: write
+      id-token: write
+    steps:
+      - name: Check out the proven tag
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.preflight.outputs.commit }}
+
+      - name: Prove immutable stable source
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          SOURCE_COMMIT: ${{ needs.preflight.outputs.commit }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
+          git fetch --force --no-tags origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+          test "$(git rev-list -n 1 "refs/tags/$RELEASE_TAG")" = "$SOURCE_COMMIT"
+
+      - name: Download unsigned APK
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: unsigned-stable-${{ needs.preflight.outputs.commit }}
+          path: ${{ runner.temp }}/unsigned
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+
+      - name: Install pinned Android build tools
+        run: sdkmanager "build-tools;35.0.0"
+
+      - name: Refuse an existing release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "A release already exists for $RELEASE_TAG" >&2
+            exit 1
+          fi
+
+      - name: Resolve highest prior stable versionCode after approval
+        id: versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          previous="$(python3 tools/release/previous_version_code.py --channel stable --repository "$GITHUB_REPOSITORY" --current-tag "$RELEASE_TAG")"
+          echo "previous_version_code=$previous" >> "$GITHUB_OUTPUT"
+
+      - name: Reconstruct protected stable key and sign one APK
+        env:
+          KEYSTORE_B64: ${{ secrets.QUICKLAUNCHER_STABLE_KEYSTORE_B64 }}
+          SIGNING_STORE_PASSPHRASE: ${{ secrets.QUICKLAUNCHER_STABLE_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.QUICKLAUNCHER_STABLE_KEY_ALIAS }}
+          SIGNING_KEY_PASSPHRASE: ${{ secrets.QUICKLAUNCHER_STABLE_KEY_PASSWORD }}
+          EXPECTED_CERTIFICATE: ${{ vars.QUICKLAUNCHER_STABLE_CERT_SHA256 }}
+          PREVIOUS_VERSION_CODE: ${{ steps.versions.outputs.previous_version_code }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          SOURCE_COMMIT: ${{ needs.preflight.outputs.commit }}
+        run: |
+          set -euo pipefail
+          umask 077
+          signing_dir="$(mktemp -d "$RUNNER_TEMP/quicklauncher-stable-signing.XXXXXX")"
+          release_dir="$RUNNER_TEMP/release"
+          trap 'rm -rf -- "$signing_dir"' EXIT
+          mkdir -p "$release_dir"
+          key_store="$signing_dir/stable.jks"
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$key_store"
+          input="$RUNNER_TEMP/unsigned/app-stable-release-unsigned.apk"
+          aligned="$signing_dir/aligned.apk"
+          asset="quicklauncher-stable-${RELEASE_TAG}-universal.apk"
+          output="$release_dir/$asset"
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -f -p 4 "$input" "$aligned"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign \
+            --ks "$key_store" --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass env:SIGNING_STORE_PASSPHRASE --key-pass env:SIGNING_KEY_PASSPHRASE \
+            --min-sdk-version 35 --debuggable-apk-permitted false \
+            --v1-signing-enabled false --v2-signing-enabled false \
+            --v3-signing-enabled true --v4-signing-enabled false \
+            --out "$output" "$aligned"
+          python3 tools/release/create_metadata.py \
+            --apk "$output" --channel stable --tag "$RELEASE_TAG" \
+            --previous-version-code "$PREVIOUS_VERSION_CODE" \
+            --source-commit "$SOURCE_COMMIT" \
+            --expected-certificate-sha256 "$EXPECTED_CERTIFICATE" \
+            --aapt "$ANDROID_HOME/build-tools/35.0.0/aapt" \
+            --apksigner "$ANDROID_HOME/build-tools/35.0.0/apksigner" \
+            --output "$release_dir/release-metadata.json"
+          digest="$(sha256sum "$output" | cut -d ' ' -f 1)"
+          printf '%s  %s\n' "$digest" "$asset" > "$release_dir/$asset.sha256"
+          test "$(find "$release_dir" -maxdepth 1 -type f -name '*.apk' | wc -l)" -eq 1
+
+      - name: Attest final signed stable bytes
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-path: ${{ runner.temp }}/release/quicklauncher-stable-${{ inputs.tag }}-universal.apk
+
+      - name: Create draft release only
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREVIOUS_VERSION_CODE: ${{ steps.versions.outputs.previous_version_code }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          SOURCE_COMMIT: ${{ needs.preflight.outputs.commit }}
+        run: |
+          set -euo pipefail
+          asset="quicklauncher-stable-${RELEASE_TAG}-universal.apk"
+          git fetch --force --no-tags origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+          test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
+          test "$(git rev-list -n 1 "refs/tags/$RELEASE_TAG")" = "$SOURCE_COMMIT"
+          current_previous="$(python3 tools/release/previous_version_code.py --channel stable --repository "$GITHUB_REPOSITORY" --current-tag "$RELEASE_TAG")"
+          test "$current_previous" = "$PREVIOUS_VERSION_CODE"
+          gh release create "$RELEASE_TAG" \
+            "$RUNNER_TEMP/release/$asset" \
+            "$RUNNER_TEMP/release/$asset.sha256" \
+            "$RUNNER_TEMP/release/release-metadata.json" \
+            --repo "$GITHUB_REPOSITORY" --verify-tag --target "$GITHUB_SHA" \
+            --draft --title "Quicklauncher stable $RELEASE_TAG" \
+            --notes "Draft stable release. Verify the APK, certificate, digest, and attestation before publishing."
+
+      - name: Redownload and independently verify the draft asset
+        env:
+          EXPECTED_CERTIFICATE: ${{ vars.QUICKLAUNCHER_STABLE_CERT_SHA256 }}
+          GH_TOKEN: ${{ github.token }}
+          PREVIOUS_VERSION_CODE: ${{ steps.versions.outputs.previous_version_code }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          SOURCE_COMMIT: ${{ needs.preflight.outputs.commit }}
+        run: |
+          set -euo pipefail
+          asset="quicklauncher-stable-${RELEASE_TAG}-universal.apk"
+          download_dir="$(mktemp -d "$RUNNER_TEMP/quicklauncher-stable-download.XXXXXX")"
+          trap 'rm -rf -- "$download_dir"' EXIT
+          mkdir "$download_dir/payload"
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern "$asset" --pattern "$asset.sha256" --pattern "release-metadata.json" \
+            --dir "$download_dir/payload"
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" --jq '.assets' > "$download_dir/assets.json"
+          gh attestation verify "$download_dir/payload/$asset" --repo "$GITHUB_REPOSITORY" \
+            --deny-self-hosted-runners \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release-stable.yml" \
+            --source-digest "$SOURCE_COMMIT" --source-ref "refs/tags/$RELEASE_TAG" \
+            --format json > "$download_dir/provenance.json"
+          python3 tools/release/validate_release_assets.py \
+            --assets-json "$download_dir/assets.json" \
+            --download-dir "$download_dir/payload" \
+            --apk "$download_dir/payload/$asset" \
+            --checksum "$download_dir/payload/$asset.sha256" \
+            --metadata "$download_dir/payload/release-metadata.json"
+          python3 tools/release/verify_release.py \
+            --apk "$download_dir/payload/$asset" \
+            --checksum "$download_dir/payload/$asset.sha256" \
+            --metadata "$download_dir/payload/release-metadata.json" \
+            --provenance-statement "$download_dir/provenance.json" \
+            --channel stable --tag "$RELEASE_TAG" \
+            --previous-version-code "$PREVIOUS_VERSION_CODE" \
+            --expected-source-commit "$SOURCE_COMMIT" \
+            --expected-certificate-sha256 "$EXPECTED_CERTIFICATE" \
+            --aapt "$ANDROID_HOME/build-tools/35.0.0/aapt" \
+            --apksigner "$ANDROID_HOME/build-tools/35.0.0/apksigner"

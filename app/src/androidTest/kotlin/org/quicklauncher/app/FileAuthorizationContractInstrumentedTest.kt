@@ -54,7 +54,11 @@ class FileAuthorizationContractInstrumentedTest {
         val durableState = setOf(
             BackupInclude("database", "quicklauncher.db", null),
             BackupInclude("file", "datastore/launcher-preferences.pb", null),
-            BackupInclude("file", "theme-assets", null),
+            BackupInclude("file", "theme-assets/fonts", null),
+            BackupInclude("file", "theme-assets/images", null),
+            BackupInclude("file", "theme-assets/previews", null),
+            BackupInclude("file", "theme-assets/preserved-backup-assets.v1", null),
+            BackupInclude("sharedpref", "portable-backup-web-adapters.xml", null),
         )
 
         val extraction = backupIncludes(R.xml.data_extraction_rules)

@@ -1,25 +1,40 @@
+@file:OptIn(androidx.compose.ui.test.ExperimentalTestApi::class)
+
 package org.quicklauncher.host.settings
 
+import androidx.activity.BackEventCompat
+import androidx.activity.OnBackPressedDispatcher
+import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.SideEffect
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.pressKey
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.quicklauncher.contracts.domain.DestinationId
+import org.quicklauncher.contracts.domain.ActivityName
+import org.quicklauncher.contracts.domain.AppActivityIdentity
 import org.quicklauncher.contracts.domain.ArgbColor
 import org.quicklauncher.contracts.domain.ContributionId
 import org.quicklauncher.contracts.domain.ModuleInstanceId
@@ -28,6 +43,7 @@ import org.quicklauncher.contracts.domain.PackageName
 import org.quicklauncher.contracts.domain.ShortcutId
 import org.quicklauncher.contracts.domain.ThemeProfileId
 import org.quicklauncher.host.runtime.LauncherDestination
+import org.quicklauncher.host.runtime.LauncherApp
 import org.quicklauncher.host.runtime.RecoveryInstance
 import org.quicklauncher.host.runtime.permissions.HomeRoleState
 import org.quicklauncher.host.runtime.notifications.NotificationAccessState
@@ -237,6 +253,42 @@ class HostOverlaysTest {
     }
 
     @Test
+    fun `create folder predictive Back cancellation preserves dialog and completion dismisses it`() {
+        lateinit var dispatcher: OnBackPressedDispatcher
+        var mapCloses = 0
+        compose.setContent {
+            val owner = checkNotNull(LocalOnBackPressedDispatcherOwner.current)
+            SideEffect { dispatcher = owner.onBackPressedDispatcher }
+            MaterialTheme {
+                MapOverviewSurface(
+                    destinations = emptyList(),
+                    onSelectDestination = {},
+                    onClose = { mapCloses += 1 },
+                )
+            }
+        }
+
+        compose.onNodeWithText("Create folder").performClick()
+        compose.onNodeWithText("Folder name").assertIsDisplayed()
+
+        compose.runOnIdle {
+            dispatcher.dispatchOnBackStarted(backEvent(progress = 0f))
+            dispatcher.dispatchOnBackProgressed(backEvent(progress = 0.6f))
+            dispatcher.dispatchOnBackCancelled()
+        }
+        compose.onNodeWithText("Folder name").assertIsDisplayed()
+        assertEquals(0, mapCloses)
+
+        compose.runOnIdle {
+            dispatcher.dispatchOnBackStarted(backEvent(progress = 0f))
+            dispatcher.dispatchOnBackProgressed(backEvent(progress = 1f))
+            dispatcher.onBackPressed()
+        }
+        compose.onNodeWithText("Folder name").assertIsNotDisplayed()
+        assertEquals(0, mapCloses)
+    }
+
+    @Test
     fun `map overview permanently exposes Private Space`() {
         var opened = false
         compose.setContent {
@@ -253,6 +305,13 @@ class HostOverlaysTest {
         compose.onNodeWithText("Private Space").assertIsDisplayed().performClick()
         assertEquals(true, opened)
     }
+
+    private fun backEvent(progress: Float): BackEventCompat = BackEventCompat(
+        touchX = 0f,
+        touchY = 0f,
+        progress = progress,
+        swipeEdge = BackEventCompat.EDGE_LEFT,
+    )
 
     @Test
     fun `hidden Private Space retains a label-free recovery command`() {
@@ -549,4 +608,220 @@ class HostOverlaysTest {
         compose.onNodeWithText("Center crop").performScrollTo().assertIsDisplayed().performClick()
         assertEquals(CenterWallpaperCrop, crop)
     }
+
+    @Test
+    fun `map overview traverses controls logically and opens create folder from D-pad`() {
+        var openedPrivateSpace = false
+        compose.setContent {
+            MaterialTheme {
+                MapOverviewSurface(
+                    destinations = emptyList(),
+                    onSelectDestination = {},
+                    onOpenPrivateSpace = { openedPrivateSpace = true },
+                    onClose = {},
+                )
+            }
+        }
+
+        traverseAndActivate("Private Space", "Create folder", Key.DirectionCenter)
+
+        assertEquals(false, openedPrivateSpace)
+        compose.onNodeWithText("Folder name").assertIsDisplayed()
+    }
+
+    @Test
+    fun `settings traverses controls logically and activates style from keyboard`() {
+        var selected: IndicatorStyleOption? = null
+        compose.setContent {
+            MaterialTheme {
+                LauncherSettingsSurface(
+                    homeRoleState = HomeRoleState.HELD,
+                    fallbackAvailable = false,
+                    onRequestHomeRole = {},
+                    onOpenHomeSettings = {},
+                    onOpenAppRecovery = {},
+                    notificationStyle = IndicatorStyleOption.HIDDEN,
+                    notificationAccess = NotificationAccessState.CONNECTED,
+                    onNotificationStyle = { selected = it },
+                    onClose = {},
+                )
+            }
+        }
+
+        traverseAndActivate("Open app recovery list", "Off ✓", Key.Enter)
+
+        assertEquals(IndicatorStyleOption.HIDDEN, selected)
+    }
+
+    @Test
+    fun `backup settings traverses page controls and activates from D-pad`() {
+        compose.setContent {
+            MaterialTheme {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    BackupSettingsContent(
+                        folderSelected = true,
+                        automaticEnabled = false,
+                        manualBackups = emptyList(),
+                        automaticBackups = emptyList(),
+                    )
+                }
+            }
+        }
+
+        traverseAndActivate("Manual backups ✓", "Automatic backups", Key.DirectionCenter)
+
+        compose.onNodeWithText("Automatic backups ✓").assertIsDisplayed()
+    }
+
+    @Test
+    fun `theme settings traverses profile controls and activates preview from keyboard`() {
+        val profileId = ThemeProfileId.parse("org.quicklauncher.theme/focus")
+        var previewed: ThemeProfileId? = null
+        compose.setContent {
+            MaterialTheme {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    ThemeSettingsContent(
+                        themeProfiles = listOf(ThemeProfileSetting(profileId, "Focus profile", true, false)),
+                        onPreviewThemeProfile = { previewed = it },
+                    )
+                }
+            }
+        }
+
+        traverseAndActivate("Focus profile", "Preview Focus profile", Key.Enter)
+
+        assertEquals(profileId, previewed)
+    }
+
+    @Test
+    fun `theme profile surface traverses creation controls and activates from D-pad`() {
+        var created: ThemeProfileCreation? = null
+        compose.setContent {
+            MaterialTheme {
+                ThemeProfileSettingsContent(
+                    themeProfiles = emptyList(),
+                    onCreate = { created = it },
+                )
+            }
+        }
+
+        traverseAndActivate("New Material You", "New Expressive", Key.DirectionCenter)
+
+        assertEquals(ThemeProfileCreation.MATERIAL_EXPRESSIVE, created)
+    }
+
+    @Test
+    fun `manual palette traverses fields to save and activates from keyboard`() {
+        var palette: ManualPaletteValues? = null
+        compose.setContent {
+            MaterialTheme {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    ManualPaletteSettingsContent(
+                        ManualPaletteSetting(
+                            ThemeProfileId.parse("org.quicklauncher.theme/focus-manual"),
+                            ArgbColor.of(0xff2949a3L),
+                            ArgbColor.of(0xffffffffL),
+                            ArgbColor.of(0xfff5f5f5L),
+                            ArgbColor.of(0xff161616L),
+                        ),
+                        onSave = { palette = it },
+                    )
+                }
+            }
+        }
+
+        compose.onNodeWithText("On surface").performScrollTo()
+        compose.onNodeWithText("Save manual palette").performScrollTo()
+        traverseAndActivate("On surface", "Save manual palette", Key.Enter)
+
+        assertEquals(0xff2949a3L, palette?.primary?.value)
+    }
+
+    @Test
+    fun `wallpaper confirmation traverses crop controls and activates from D-pad`() {
+        var crop = FullWallpaperCrop
+        compose.setContent {
+            MaterialTheme {
+                WallpaperConfirmationContent(
+                    visible = true,
+                    onCrop = { crop = it },
+                )
+            }
+        }
+
+        traverseAndActivate("Full image", "Center crop", Key.DirectionCenter)
+
+        assertEquals(CenterWallpaperCrop, crop)
+    }
+
+    @Test
+    fun `app recovery traverses apps and activates the next app from keyboard`() {
+        val personal = recoveryApp(0, "org.example.personal", "Personal")
+        val work = recoveryApp(10, "org.example.work", "Work")
+        var launched: AppActivityIdentity? = null
+        compose.setContent {
+            MaterialTheme {
+                AppRecoverySurface(listOf(personal, work), { launched = it }, {})
+            }
+        }
+
+        traverseAndActivate("Personal", "Work, Work", Key.Enter)
+
+        assertEquals(work.identity, launched)
+    }
+
+    @Test
+    fun `recovery traverses retry controls and activates from D-pad`() {
+        val first = ModuleInstanceId.parse("org.quicklauncher.instance/first")
+        val second = ModuleInstanceId.parse("org.quicklauncher.instance/second")
+        var retried: ModuleInstanceId? = null
+        compose.setContent {
+            MaterialTheme {
+                RecoverySurface(
+                    instances = listOf(
+                        RecoveryInstance(first, "First", "private-code-1", true),
+                        RecoveryInstance(second, "Second", "private-code-2", true),
+                    ),
+                    onRetry = { retried = it },
+                    onClose = {},
+                )
+            }
+        }
+
+        traverseAndActivate("Retry renderer", "Retry renderer", Key.DirectionCenter, secondMatch = true)
+
+        assertEquals(second, retried)
+    }
+
+    private fun traverseAndActivate(
+        firstLabel: String,
+        secondLabel: String,
+        activationKey: Key,
+        secondMatch: Boolean = false,
+    ) {
+        val first = if (secondMatch) {
+            compose.onAllNodesWithText(firstLabel)[0]
+        } else {
+            compose.onNodeWithText(firstLabel)
+        }
+        val second = if (secondMatch) {
+            compose.onAllNodesWithText(secondLabel)[1]
+        } else {
+            compose.onNodeWithText(secondLabel)
+        }
+        first.performSemanticsAction(SemanticsActions.RequestFocus)
+            .assertIsFocused()
+            .performKeyInput { pressKey(Key.Tab) }
+        second.assertIsFocused().performKeyInput { pressKey(activationKey) }
+    }
+
+    private fun recoveryApp(profile: Long, packageName: String, label: String) = LauncherApp(
+        identity = AppActivityIdentity(
+            ProfileSerial.of(profile),
+            PackageName.parse(packageName),
+            ActivityName.parse("$packageName.Main"),
+        ),
+        label = label,
+        workProfile = profile != 0L,
+    )
 }

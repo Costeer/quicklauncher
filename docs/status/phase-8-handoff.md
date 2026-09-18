@@ -1,54 +1,31 @@
 # Phase 8 handoff
 
-Status: Phase 8 is in progress and must not be declared complete. Preserve the mixed Phase 5 through Phase 8 worktree and all untracked files. Do not stage, commit, reset, clean, stash, discard, push, publish, sign, change dependency/check policy, or use the attached GrapheneOS phone.
+Status: Phase 8 is complete at relevant source fingerprint `65820aea82c057acf53678db1dbc5a5946eeba962f7df7d5ca653ae55d086656`. P8-ENVELOPE through P8-GATES and the exit condition are satisfied. Preserve the mixed Phase 5 through Phase 8 worktree and all untracked files; no change was staged, committed, reset, cleaned, stashed, discarded, pushed, published, or signed.
 
-## Completed in this packet
+## Completed behavior
 
-- The exact inherited focused command passed before edits and again after them.
-- Restore now performs non-cancellable best-effort auxiliary rollback after cancellation, commit failure, store exception, or store rejection. Rollback failures cannot mask the original result.
-- Focused tests cover theme-asset stage/commit/discard, restore cancellation and runtime failures, recreation expiry, and idempotent Home/Back cancellation.
-- A pending restore review now expires across process recreation instead of retaining an unusable token. Inventory refresh no longer erases operation messages.
-- SAF discovery retains archives with unknown provider size and relies on the bounded read. Child validation uses the tree's parent document URI.
-- Empty optional theme, web, and asset envelopes are omitted. The launcher snapshot is no longer duplicated into the theme section. Optional typed sections are validated when present.
-- Android backup-rule instrumentation coverage compiles and asserts include-only database, preferences-proto, and theme-asset rules.
-- Automatic backup now uses a persisted one-shot job for the next 03:00 local boundary, retains the charging constraint, exports only before 06:00, and schedules the next night after completion, failure, or interruption.
-- Enabling automatic backup persists only after scheduling succeeds. Startup either finds or recreates the expected job; a failed reconciliation or successor schedule disables the stored preference.
-- Focused clock tests cover the nightly boundaries and both daylight-saving transitions. API 35 instrumentation inspects the pending job's one-shot, persisted, charging-only contract.
-- Inventory and retention use codec-accepted archive kind and creation time, not names or provider timestamps. Protected wrapper magic keeps an encrypted archive discoverable in the manual list until preview authenticates it; retention never acts on it. Renamed manual and corrupt automatic-looking documents are not pruned.
-- Export and preview enforce canonical `font`, `image`, and `preview` sections for every current decoded theme reference before writing or showing restore review. Opaque future records may retain well-formed extra assets.
-- Asset manifests remain optional. A present manifest must be non-empty and exactly index all asset sections by canonical name and SHA-256 digest.
-- Restore presents themes and imported assets as one category. Destination-map and web-adapter data remain independent. Web-adapter payloads and opaque launcher extensions persist privately across selected restore, app recreation, and later export without being executed.
-- Failed or cancelled restore discards auxiliary changes. Normal theme reconciliation removes interrupted `restore-<uuid>` staging directories after process recreation.
-- Manual archives and automatic snapshots now use separate Settings pages. Post-restore actions cover document and permission reauthorization, widget rebinding, quarantine review, and profile review. Recovery counts survive Activity recreation; pending preview tokens expire.
-- Support diagnostics now use a bounded checksummed private log. A successful user export clears only the exported prefix; cancellation, failure, or concurrently appended events remain.
-- Checked-in version 1 launcher, web-adapter, and complete archive fixtures round-trip byte for byte. Crypto coverage includes the published fixed vector, parameter changes, selected truncations, tampering, bounds, and working-copy clearing.
-- The large-text restore review has a separate bottom-scrolled actions baseline. It visibly includes the card heading, all review summaries, category choices, the primary restore action, and cancellation at 2x text. The original captures remain in place.
-- The archive specification, Phase 8 scope, current state, and focused evidence ledger were updated.
+- Portable v1 archives have canonical bounded envelopes, typed launcher/theme/web/asset payloads, checked fixtures, opaque extension preservation, and a separately authenticated passphrase wrapper.
+- SAF authorization and bounded streaming, protected-manual discovery, distinct manual/automatic/pre-restore inventories, seven-snapshot decoded-kind retention, and one-shot charging-only nightly scheduling are complete. Android adapters live in `:host:platform`; pure nightly policy remains in `:host:backup`.
+- Preview validates exact-kind theme/background references, optional exact manifests, and malformed assets before review. Well-formed future assets remain opaque and archive-local.
+- Restore creates a pre-restore archive, uses independent destination-map, themes/assets, and web-adapter selections, stages auxiliary work, and performs one revision-checked Room replacement. Composite staging discards all acquired stages after later acquisition failure or cancellation; reconciliation removes interrupted stages and exact-kind unreferenced assets.
+- Recovery actions and real restored profile serials survive recreation while pending preview tokens expire. Support diagnostics are bounded, checksummed, private, corruption-safe, and cleared only after successful export.
+- Android backup rules include only durable database, Proto preferences, installed theme assets, preservation metadata, and opaque web/extension preferences; staging, diagnostics, authorization, and passphrases are excluded.
 
-## Verification
+## Final release evidence
 
-- Consolidated focused run: 30 tests, no failures, stable app compilation, 13s. Source fingerprint `acea67be2e3ed2d7c7c5c4d7c5afbe1b191b170e84237e5aea532c02970c0327`.
-- Settings Paparazzi verification passed without recording: 30 tests, no failures, 93s. Source fingerprint `6b9261c57849f1c3e7e473e336ab5b4ebebdea74b6e44a623bc296d73c5c26e5`.
-- Nightly scheduling focused verification passed 6 tests with stable app and Android-test compilation in 15s. Source fingerprint `5e6a70f5cf07d7bb639a23b768fc7ce5faa4a327b8ef89d2dc58daba4783e66c`.
-- Asset consistency focused verification passed 21 tests with stable app Android-test compilation in 2m17s. Source fingerprint `0517ba4fc7a88a21e431fe0c9cd3b63b4af83c1e8a6b6141fdd492fb1781a0fb`.
-- Focused settings Paparazzi recording and the following no-record verification each passed 1 test. The final verification took 41s at source fingerprint `a4b6751b61527b93739d40ff1e5b6f3a7715233c8b774f4c1ae13abf79e8f59f`.
-- The final fixture and crypto debug/release runs each passed 29 tests. Logs: `/tmp/quicklauncher-agent-logs/gradle-20260917T115845Z-890872.log` and `/tmp/quicklauncher-agent-logs/gradle-20260917T115920Z-891756.log`.
-- The final retention/library run passed 17 tests in 70s, and the SAF Android-test source compiled in 35s. Logs: `/tmp/quicklauncher-agent-logs/gradle-20260917T120533Z-898949.log` and `/tmp/quicklauncher-agent-logs/gradle-20260917T120444Z-897917.log`.
-- The final diagnostics preference/log run passed 9 selected tests in 116s. Log: `/tmp/quicklauncher-agent-logs/gradle-20260917T120115Z-893820.log`.
-- The integrated restore and recreation run passed 21 tests in 76s; the follow-up library run passed 18 tests in 56s. Logs: `/tmp/quicklauncher-agent-logs/gradle-20260917T120913Z-907069.log` and `/tmp/quicklauncher-agent-logs/gradle-20260917T121246Z-913882.log`.
-- After the expected UI mismatch, the updated settings baseline record passed 33 tests in 131s and no-record verification passed 33 tests in 119s. Logs: `/tmp/quicklauncher-agent-logs/gradle-20260917T121646Z-922041.log` and `/tmp/quicklauncher-agent-logs/gradle-20260917T121912Z-927024.log`. The review fingerprint at that point was `e1cbe86a8564111b394b65735a05dab57c72efd594a31f0bd96be73733476c51`; the later protected-manual discovery fix and these documentation edits supersede it.
-- Protected-manual discovery then passed all 18 library tests in 54s. Log: `/tmp/quicklauncher-agent-logs/gradle-20260917T122353Z-936824.log`.
-- `git diff --check` passed. `tools/agent_usage_report.py --repo . --top 15` ran.
-- Full commands and logs are in [Phase 8 backup evidence](phase-8-backup-evidence.md).
+- Full local gate: `tools/gradle --summary build checkModuleBoundaries verifyNoGoogleDependencies buildHealth --no-daemon --no-configuration-cache --console=plain`; 2026-09-17 14:17:09–14:18:37 UTC, 88s, 3,831 actionable tasks, 713 tests, 0 failures/errors/skips. Log: `/tmp/quicklauncher-agent-logs/gradle-20260917T141709Z-159573.log`.
+- Six-module no-record Paparazzi gate: 18s, 334 tests, all passed. Log: `/tmp/quicklauncher-phase8-final-gates/visual/post-review-fixes/gradle-20260917T141913Z-164299.log`. The four backup-review baselines were visually inspected; controls, independent categories, restore/cancel actions, contrast, wrapping, and clipping were acceptable at light/dark, portrait/landscape, and 2x text.
+- CI-derived license gate: 23 declared entry tasks, 38 actionable tasks, all passed in 11s. `nix shell nixpkgs#actionlint -c actionlint .github/workflows/ci.yml` passed in 0.226s with no diagnostics.
+- Repository/privacy/release audit and `git diff --check` passed. No release, dependency-verification, signing, publishing, workflow-permission, application-ID, or version policy changed.
+- Pinned API 35 AOSP gate on `quicklauncher_aosp_full35_phase5`, serial `emulator-5554`, exact fingerprint `Android/sdk_phone64_x86_64/emu64x:15/AE3A.240806.019/12368160:userdebug/test-keys`: 127s, 78 tests, 75 passed and 3 capability skips. The requested AVD had been absent, so Emulator 37.1.11, API 35 default x86_64 revision 2, and a Pixel 6 full-phone profile were provisioned as recorded in `/tmp/quicklauncher-phase8-final-gates/avd-provision/README.md`. The required Home/resolved Home, font, rotation, night, listener, users/owners, packages/permissions, wallpaper, widgets, URI grants, jobs, and shared files were captured and restored; the semantic diff was empty. `emu kill` succeeded, pinned `get-state` failed afterward, and `-no-snapshot-save` was used. No GrapheneOS or other serial was queried.
+- Final reviews are separate: spec found 0 issues and explicitly rechecked SAF close-before-rename/partial deletion; standards found 0 documented-standard violations. The standards reviewer recorded two medium divergent-responsibility smells and one low restore-port API-surface smell as non-blocking follow-up.
 
-## Remaining work and risks
+## Relevant failure history
 
-1. Record the post-documentation fingerprint, then run the final local, release, lint, full visual, license, workflow, and diff gates. Focused fingerprints above are not final-gate fingerprints.
-2. Run required connected checks only on the pinned API 35 AOSP full-phone AVD. Record its state before testing, restore it exactly, and stop without saving a snapshot.
-3. Treat GrapheneOS results only as owner-supplied evidence. Do not use the attached phone.
+- The handed-off `/tmp/quicklauncher-agent-logs/gradle-20260917T123846Z-967677.log` compile failure was fixed by making `AndroidThemeAssetStore.deleteUnreferenced` return `Unit`; `/tmp/quicklauncher-agent-logs/gradle-20260917T124452Z-981513.log` then passed 36 tests.
+- The first full gate found missing `RECEIVE_BOOT_COMPLETED`; the permission moved with the scheduler adapter to `:host:platform`, and focused lint/Android-test compilation passed.
+- A later full run suffered an OpenJDK/Paparazzi native JVM crash. `modules/layout/core/hs_err_pid51270.log` was preserved; subsequent runs passed.
+- Dependency-health advice was resolved iteratively without weakening policy. Backup-rule auditing then found missing durable state, the rules and exact contract test were corrected, and every invalidated local, visual, license/workflow, repository, connected, and review gate passed again on the final fingerprint.
+- First final reviews found the Android adapter boundary and partial composite-stage cleanup issues; both were fixed, focused regressions passed, and both review axes were rerun.
 
-## Exact next command
-
-```sh
-tools/gradle --summary build checkModuleBoundaries verifyNoGoogleDependencies buildHealth --no-daemon --no-configuration-cache --console=plain
-```
+The full focused and final ledger is [Phase 8 backup evidence](phase-8-backup-evidence.md). There is no Phase 8 macrobenchmark task or module; measured accessibility and performance thresholds remain Phase 9 release-hardening work under the existing architecture plan. GrapheneOS results remain owner-supplied evidence only.

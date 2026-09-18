@@ -49,7 +49,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -107,6 +106,7 @@ import org.quicklauncher.host.editor.registryEditorConfigurationDefaults
 import org.quicklauncher.host.platform.apps.AndroidAppPlatform
 import org.quicklauncher.host.platform.actions.AndroidItemActionPlatform
 import org.quicklauncher.host.platform.notifications.AndroidNotificationPlatform
+import org.quicklauncher.host.platform.motion.AndroidMotionPolicy
 import org.quicklauncher.host.platform.profile.AndroidProfilePlatform
 import org.quicklauncher.host.platform.profile.AndroidSecureOverlayProtection
 import org.quicklauncher.host.platform.shortcuts.AndroidShortcutPlatform
@@ -599,7 +599,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val systemDark = isSystemInDarkTheme()
             val textScale = LocalDensity.current.fontScale
-            val reducedMotion = !android.animation.ValueAnimator.areAnimatorsEnabled()
+            val reducedMotion = AndroidMotionPolicy.reducedMotion()
             val themeState by (themeController?.state ?: flowOf(defaultThemeControllerState()))
                 .collectAsState(initial = defaultThemeControllerState())
             val launcherState by runtime.state.collectAsState()
@@ -893,7 +893,7 @@ class MainActivity : ComponentActivity() {
                     android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
                     android.content.res.Configuration.UI_MODE_NIGHT_YES,
                 textScale = resources.configuration.fontScale,
-                reducedMotion = !android.animation.ValueAnimator.areAnimatorsEnabled(),
+                reducedMotion = AndroidMotionPolicy.reducedMotion(),
                 profile = state.activeProfile,
                 registeredCapabilities = themeCapabilities,
                 availableFontAssets = state.fontAssets,
@@ -2172,7 +2172,7 @@ private fun QuicklauncherRoot(
     }
     var fallbackRequired by remember { mutableStateOf(false) }
     var onboardingPreview by remember { mutableStateOf<org.quicklauncher.host.editor.OnboardingPreview?>(null) }
-    var onboardingInstalled by remember {
+    var onboardingInstalled by remember(preferenceState.onboardingState) {
         mutableStateOf(preferenceState.onboardingState == OnboardingState.IN_PROGRESS)
     }
     var onboardingMessage by remember { mutableStateOf<String?>(null) }
@@ -2184,19 +2184,20 @@ private fun QuicklauncherRoot(
             currentBackupUiState.review != null ||
             (state.surface != LauncherSurface.SAFE_LAYOUT && state.surface != LauncherSurface.SELECTED_LAYOUT),
     ) { progress ->
-        progress.collect()
-        if (currentWallpaperPreview != null) {
-            onCancelWallpaper()
-        } else if (currentBackupUiState.review != null) {
-            onCancelBackupRestore()
-        } else if (searchActive) {
-            searchPresentations.dismissAll()
-        } else if (phaseFiveOverlay != PhaseFiveOverlay.NONE) {
-            phaseFiveHost.closeOverlay()
-        } else if (editorState.screen != EditorScreen.CLOSED) {
-            editor.dispatch(EditorAction.Close)
-        } else {
-            runtime.closeOverlay()
+        org.quicklauncher.host.runtime.navigation.PredictiveBackCommitPolicy.collect(progress) {
+            if (currentWallpaperPreview != null) {
+                onCancelWallpaper()
+            } else if (currentBackupUiState.review != null) {
+                onCancelBackupRestore()
+            } else if (searchActive) {
+                searchPresentations.dismissAll()
+            } else if (phaseFiveOverlay != PhaseFiveOverlay.NONE) {
+                phaseFiveHost.closeOverlay()
+            } else if (editorState.screen != EditorScreen.CLOSED) {
+                editor.dispatch(EditorAction.Close)
+            } else {
+                runtime.closeOverlay()
+            }
         }
     }
 

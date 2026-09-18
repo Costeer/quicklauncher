@@ -33,6 +33,8 @@ import org.quicklauncher.host.runtime.theme.MAX_IMAGE_MEMORY_BYTES
 import org.quicklauncher.host.runtime.theme.MAX_IMAGE_PIXELS
 import org.quicklauncher.host.runtime.theme.MAX_PREVIEW_DIMENSION
 import org.quicklauncher.host.runtime.theme.ThemeAssetInventory
+import org.quicklauncher.host.runtime.theme.ThemeAssetIdentity
+import org.quicklauncher.host.runtime.theme.ThemeAssetKind
 import org.quicklauncher.host.runtime.theme.WallpaperCrop
 import org.quicklauncher.host.runtime.theme.WallpaperPlatform
 import org.quicklauncher.host.runtime.theme.WallpaperPlatformResult
@@ -331,9 +333,9 @@ class AndroidThemeAssetStore(
             )
         }
 
-    override suspend fun deleteUnreferenced(referenced: Set<StableKey>) = boundedIo(Unit) {
+    override suspend fun deleteUnreferenced(referenced: Set<ThemeAssetIdentity>) = boundedIo(Unit) {
         cleanupInterruptedRestoreStaging()
-        val preserved = readPreservedBackupAssets().filterNotTo(linkedSetOf()) { it.id in referenced }
+        val preserved = readPreservedBackupAssets().filterNotTo(linkedSetOf()) { it.runtimeIdentity() in referenced }
         listOf(
             AssetDirectory(fontDirectory, FONT_SUFFIX, MAX_FONT_ASSETS, ThemeAssetBackupKind.FONT),
             AssetDirectory(imageDirectory, IMAGE_SUFFIX, MAX_IMAGE_ASSETS, ThemeAssetBackupKind.IMAGE),
@@ -341,7 +343,8 @@ class AndroidThemeAssetStore(
         ).forEach { (directory, suffix, limit, kind) ->
             boundedFiles(directory, limit + MAX_PENDING_FILES).forEach { file ->
                 val id = parseAssetFile(file, suffix)
-                if (id == null || id !in referenced && ThemeAssetBackupIdentity(id, kind) !in preserved) {
+                val identity = id?.let { ThemeAssetBackupIdentity(it, kind) }
+                if (identity == null || identity.runtimeIdentity() !in referenced && identity !in preserved) {
                     file.delete()
                 }
             }
@@ -349,6 +352,15 @@ class AndroidThemeAssetStore(
         writePreservedBackupAssets(preserved)
         Unit
     }
+
+    private fun ThemeAssetBackupIdentity.runtimeIdentity() = ThemeAssetIdentity(
+        id,
+        when (kind) {
+            ThemeAssetBackupKind.FONT -> ThemeAssetKind.FONT
+            ThemeAssetBackupKind.IMAGE -> ThemeAssetKind.IMAGE
+            ThemeAssetBackupKind.PREVIEW -> ThemeAssetKind.PREVIEW
+        },
+    )
 
     private fun readPreservedBackupAssets(): Set<ThemeAssetBackupIdentity> {
         if (!preservedBackupAssetsFile.isFile || preservedBackupAssetsFile.length() > MAX_PRESERVED_BYTES) {
