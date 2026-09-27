@@ -24,6 +24,10 @@ This is the authoritative Phase 9 ledger. The production-signed stable `v0.1.1` 
 - Two AES-256-GCM/PBKDF2 encrypted local backups restored independently and matched that certificate. They occupy separate directories on this machine; the vault also retains the complete identity. Temporary plaintext staging was deleted. Encrypted offline backup custody is mandatory under ADR 0025 and remains open: no offline media is mounted, and the owner explicitly chose to leave custody pending while the unpublished draft proceeds. Local directories and the online vault do not satisfy that offline requirement.
 - This setup preceded the protected `v0.1.1` run documented below. Signing, attestation and draft creation subsequently succeeded; publication did not occur. Resume checkpoint: `/tmp/quicklauncher-phase9-release-resume/checkpoint.md`.
 
+## Owner-designated Sabrent backup copy
+
+At the owner's request, the previously restore-verified encrypted stable backup was copied to `/mnt/Sabrent/Quicklauncher/signing-backups/stable/`, alongside `restore.py`, `README.txt`, `SHA256SUMS`, and a non-secret copy-verification record. The destination is a separate LUKS-backed filesystem (`/dev/mapper/Sabrent`), distinct from the original backups. Files were synchronized and reread; the backup, helper, and README matched their originals byte for byte. Backup SHA-256: `ce3d956fe643a34da72ee30972a153e0555170949d176891e98af19816814c8b`. No password or plaintext key was copied, and no new decryption drill was performed. The drive remained mounted after copying; taking it offline remains the final custody action. This copy does not yet close ADR 0025's offline requirement or Phase 9.
+
 ## Corrected 0.1.1 candidate
 
 - Hosted CI run `36351342991` fails because the pinned Android setup action defaults to installing removed package `tools`. All 15 CI/stable/preview setup steps now explicitly request `platform-tools`; later steps still install the pinned platform and build-tools versions.
