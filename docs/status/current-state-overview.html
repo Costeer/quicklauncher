@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Quicklauncher Phase 9 release-hardening status as of 18 September 2026.">
+  <meta name="description" content="Quicklauncher Phase 9 release-hardening status as of 28 September 2026.">
   <title>Quicklauncher · Current state</title>
   <style>
     :root {
@@ -247,9 +247,9 @@
   <main>
     <section class="hero">
       <div class="shell">
-        <span class="eyebrow">Phase 9 repository candidate · authority-bound evidence open</span>
+        <span class="eyebrow">Phase 9 verified draft · offline custody pending</span>
         <h1>A launcher built around hard boundaries.</h1>
-        <p class="hero-copy"><strong>Phases 0–8 are complete.</strong> Phase 9 now has measured contracts, security audits, protected draft workflows, independent artifact verification, channel metadata, disposable-key recovery, user guidance, and passing GrapheneOS and pinned API 35 matrices. Protected real-draft proof remains open.</p>
+        <p class="hero-copy"><strong>Phases 0–8 are complete.</strong> Phase 9 now has measured contracts, security audits, protected draft workflows, independent artifact verification, channel metadata, disposable-key recovery, user guidance, and passing GrapheneOS and pinned API 35 matrices. The production stable draft passes independent verification and remains unpublished. Required offline key custody is owner-deferred; Phase 9 remains incomplete.</p>
 
         <div class="phase-track" aria-label="Project phase progress">
           <div class="phase done"><span>Phase 0</span><strong>Foundation ✓</strong></div>
@@ -330,7 +330,7 @@
           <article class="card capability"><header><h3>Production providers</h3><span class="status">Ready</span></header><p>Nine generated-registry providers cover apps, shortcuts, commands, contacts, authorized files, Settings, GrapheneOS, web, and recovery information.</p><ul><li>Exact Settings route revalidation</li><li>Persisted SAF grants and runtime contacts</li><li>Encoded exact-host HTTPS actions</li></ul></article>
           <article class="card capability"><header><h3>Theme system</h3><span class="status">Ready</span></header><p>One host resolver supplies the immutable theme used by Material surfaces, Settings, production composition, cold restore, previews, layouts, and blocks.</p><ul><li>Built-in, Material You, Expressive, manual</li><li>Bounded fonts, icons, images, backgrounds</li><li>Explicit typed wallpaper confirmation</li></ul></article>
           <article class="card capability"><header><h3>Backup and restore</h3><span class="status">Ready</span></header><p>Versioned bounded archives use SAF authorization, authenticated optional encryption, validation before review, and staged atomic replacement.</p><ul><li>Manual and seven-snapshot automatic inventories</li><li>Independent restore categories and recovery state</li><li>Opaque future records and exact-kind assets preserved</li></ul></article>
-          <article class="card capability"><header><h3>Release hardening</h3><span class="status">Draft blocked</span></header><p>Stable and preview have separate protected draft workflows, identities, artifacts, Obtainium metadata, and independent verification.</p><ul><li>Digest, certificate, v3 signature, and provenance checks</li><li>Security/privacy and exact dependency audits</li><li>GrapheneOS and API 35 evidence passed; protected real draft remains open</li></ul></article>
+          <article class="card capability"><header><h3>Release hardening</h3><span class="status">Draft verified</span></header><p>Stable and preview have separate protected draft workflows, identities, artifacts, Obtainium metadata, and independent verification.</p><ul><li>Digest, certificate, v3 signature, and provenance checks</li><li>Security/privacy and exact dependency audits</li><li>Historical device evidence retained; real stable draft independently verified; offline custody pending</li></ul></article>
         </div>
       </div>
     </section>
@@ -394,8 +394,8 @@
         <article class="card blocker">
           <div class="blocker-line" aria-hidden="true"></div>
           <div>
-            <h2 id="blocker-heading">Phase 9 protected-draft evidence remains open</h2>
-            <p>The current GrapheneOS matrix passes on candidate <code>9d013c4b…d28289d</code>. The pinned API 35 connected and benchmark matrices pass on source fingerprint <code>7912ef41…ae8287</code>, the final repository gates pass separately on <code>f8a76ee4…40fa97f</code>, and both review axes pass on documentation-inclusive fingerprint <code>6b1337cd…0577bd88</code>. Stable tag <code>v0.1.0</code> resolves to reviewed commit <code>eaf6af35…d6e4</code>, and GitHub CLI is authenticated. The protected run remains blocked because the private repository's billing capability rejected the required-reviewer rule; the resulting environment is empty and unprotected, with no signing secrets or certificate variable.</p>
+            <h2 id="blocker-heading">Phase 9 offline key custody remains required</h2>
+            <p>Stable tag <code>v0.1.1</code> resolves to reviewed source <code>2483b009…6b75b</code>. Local gates passed 4,616 task events and 1,547 tests; visuals passed 365 tests, 51 benchmark dependencies were approved, and both review axes passed on fingerprint <code>0811deaa…ebbb5</code>. Protected hosted pre-sign gates passed 1,593 tests; signing, attestation and draft creation succeeded. The hosted final draft lookup failed HTTP 404; independent download verification then passed all 14 commands. <a href="https://github.com/Costeer/quicklauncher/releases/tag/untagged-9367661a9eed8b1a939f">Draft 397833383</a> remains unpublished with three uploaded assets. Workflow repair <code>0e27d8c</code> applies to future runs, not this signed tag. Mandatory offline custody remains owner-deferred and required. Historical GrapheneOS/API 35 results retain their original APK identities.</p>
           </div>
           <a href="phase-9-release-evidence.md">Open evidence ↗</a>
         </article>
@@ -409,7 +409,13 @@
           <p>The status documents retain device fingerprints, restoration steps, durations, and complete results.</p>
         </div>
         <div class="command-list">
-          <details><summary>Phase 9 local gate · 68s · 4,038 actionable tasks · passed</summary><pre>GRADLE_USER_HOME=/tmp/quicklauncher-phase9-gradle-home \
+          <details><summary>Stable v0.1.1 · independent draft verification passed</summary><pre># Source: 2483b009733f9da07231ff8b11c6ed015e46b75b
+# Local gate: 697s wrapper · 4,616 task events · 1,547 tests.
+# Hosted pre-sign gate: 1,593 tests; final draft lookup failed HTTP 404.
+# Independent verifier: 14 commands passed; draft retained unpublished.
+# Evidence: /tmp/quicklauncher-phase9-release-resume/independent-v0.1.1/ledger.json
+# Exact commands, certificate and APK digest: phase-9-release-evidence.md</pre></details>
+          <details><summary>Historical post-API 35 local gate · 68s · 4,038 actionable tasks · passed</summary><pre>GRADLE_USER_HOME=/tmp/quicklauncher-phase9-gradle-home \
 tools/gradle --summary --project-cache-dir /tmp/quicklauncher-phase9-project-cache \
   build checkModuleBoundaries verifyNoGoogleDependencies buildHealth checkPhase9Performance \
   --max-workers=1 --no-daemon --no-configuration-cache --console=plain

@@ -139,7 +139,9 @@ Status: complete.
 
 ## P9-03A: release identity, provenance, and channels
 
-Status: local/dummy verification complete; protected real draft is authorized but blocked at preflight.
+Resume update (2026-09-28): public visibility, reviewer protection, first stable signing identity, encrypted local restores and trusted certificate are configured. Corrected candidate `v0.1.1` at `2483b009733f9da07231ff8b11c6ed015e46b75b` passed local gates and both review axes; protected pre-sign gates, production signing and attestation succeeded. Independent downloaded-draft verification passed all 14 commands. The hosted final-step draft lookup failed HTTP 404 and remains recorded separately. Future-workflow repair commit `0e27d8c` does not change the signed tag. Mandatory offline key custody remains required and owner-deferred; the draft is unpublished.
+
+Status: local/dummy and production stable downloaded proof pass; original hosted run failed only the final draft lookup. Overall Phase 9 remains open for offline custody.
 
 - Acceptance IDs: `P9-RELEASE`, `P9-CHANNELS`.
 - User goal: keep channels separate and independently verify a downloaded draft's tag, application ID, certificate, digest, and provenance.
@@ -163,14 +165,14 @@ Status: local/dummy verification complete; protected real draft is authorized bu
   - `tools/release/test_release_tools.py`
   - `tools/release/fixtures/github-attestation-verification.json`
   - `tools/release/__init__.py`
-- Excluded work: disposable recovery is P9-03B. Candidate commit `eaf6af3503b30254e8a5917c579b83620ed8d6e4`, remote stable tag `v0.1.0`, and authenticated `gh` now satisfy the source-control prerequisites. Production signing/draft evidence remains blocked until the repository plan supports the mandated required-reviewer protection and the owner provisions the existing stable secrets plus independently trusted certificate variable. Publication remains excluded.
+- Excluded work: disposable recovery is P9-03B. Production signing was subsequently explicitly authorized and its verified draft evidence is in the release ledger. Publication remains excluded. Required production offline custody is owner-deferred; original tag `v0.1.0` and signed tag `v0.1.1` remain unchanged.
 - Focused checks:
   - `env PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -v -s tools/release -p 'test*.py'`
   - `env PYTHONDONTWRITEBYTECODE=1 python3 tools/release/validate_channels.py && env PYTHONDONTWRITEBYTECODE=1 python3 tools/release/validate_workflows.py`
   - `env PYTHONDONTWRITEBYTECODE=1 python3 tools/release/dummy_release_drill.py --unsigned-apk app/build/outputs/apk/stable/release/app-stable-release-unsigned.apk --channel stable --aapt /home/costeer/.cache/quicklauncher-android-sdk/build-tools/35.0.0/aapt --apksigner /home/costeer/.cache/quicklauncher-android-sdk/build-tools/35.0.0/apksigner --zipalign /home/costeer/.cache/quicklauncher-android-sdk/build-tools/35.0.0/zipalign --keytool /home/costeer/.nix-profile/bin/keytool`
   - `env PYTHONDONTWRITEBYTECODE=1 python3 tools/release/dummy_release_drill.py --unsigned-apk app/build/outputs/apk/preview/release/app-preview-release-unsigned.apk --channel preview --aapt /home/costeer/.cache/quicklauncher-android-sdk/build-tools/35.0.0/aapt --apksigner /home/costeer/.cache/quicklauncher-android-sdk/build-tools/35.0.0/apksigner --zipalign /home/costeer/.cache/quicklauncher-android-sdk/build-tools/35.0.0/zipalign --keytool /home/costeer/.nix-profile/bin/keytool`
   - `nix shell nixpkgs#actionlint -c actionlint .github/workflows/ci.yml .github/workflows/release-stable.yml .github/workflows/release-preview.yml`
-- Evidence output: `/tmp/quicklauncher-phase9-p9-03/`, `/tmp/quicklauncher-phase9-final-gates-final2/non-gradle-final/`, `/tmp/quicklauncher-phase9-protected-draft-preflight/report.md`, and `/tmp/quicklauncher-phase9-stable-pre-dispatch/`.
+- Evidence output: `/tmp/quicklauncher-phase9-release-resume/independent-v0.1.1/`, `/tmp/quicklauncher-phase9-release-resume/hosted/`, `/tmp/quicklauncher-phase9-p9-03/`, `/tmp/quicklauncher-phase9-final-gates-final2/non-gradle-final/`, `/tmp/quicklauncher-phase9-protected-draft-preflight/report.md`, and `/tmp/quicklauncher-phase9-stable-pre-dispatch/`.
 
 ## P9-03B: disposable signing-key recovery
 
@@ -206,7 +208,7 @@ Status: complete.
 
 ## P9-05: final release evidence
 
-Status: terminal repository gates, current GrapheneOS compatibility, pinned API 35 accessibility/performance evidence, and separate final two-axis reviews are complete; protected real-draft evidence is the sole external blocker.
+Status: corrected candidate gates and both review axes pass; independent real-draft proof passes. Historical authorized device evidence retains its original identities. Mandatory production offline custody remains owner-deferred and required; Phase 9 is incomplete. The original hosted final-step failure is preserved separately from future workflow repair.
 
 - Acceptance IDs: `P9-GATES`.
 - User goal: bind every applicable gate and both review axes to the final relevant candidate without publishing.
@@ -222,7 +224,7 @@ Status: terminal repository gates, current GrapheneOS compatibility, pinned API 
   - `docs/status/phase-9-accessibility-evidence.md`
   - `docs/status/phase-9-release-evidence.md`
   - `docs/status/phase-9-handoff.md`
-- Excluded work: publishing, production signing, source-control mutation without explicit scope, unauthorized device access, and owner evidence fabrication.
+- Excluded work: publishing, source-control mutation without explicit scope, unauthorized device access, and owner evidence fabrication. Production signing was separately owner-authorized and is now evidenced; offline custody is not inferred from local backup copies.
 - Focused checks:
   - `GRADLE_USER_HOME=/tmp/quicklauncher-phase9-gradle-home tools/gradle --summary --project-cache-dir /tmp/quicklauncher-phase9-project-cache build checkModuleBoundaries verifyNoGoogleDependencies buildHealth checkPhase9Performance --max-workers=1 --no-daemon --no-configuration-cache --console=plain`
   - `git diff --check && tools/worktree_fingerprint.py`
