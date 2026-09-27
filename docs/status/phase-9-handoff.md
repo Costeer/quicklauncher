@@ -1,6 +1,6 @@
 # Phase 9 release-hardening handoff
 
-The production-signed stable `v0.1.1` draft resolves to reviewed source `2483b009733f9da07231ff8b11c6ed015e46b75b`. Candidate local, visual, license and both review axes pass at fingerprint `0811deaa4463623cf727574410775aaea8ca9855ba22b9ca8c9a8f2e3afebbb5`. The protected hosted run passed pre-sign gates and produced a signed, attested draft; its final verification step failed on a draft lookup HTTP 404. Independent downloaded-artifact verification then passed all 14 commands. [Draft 397833383](https://github.com/Costeer/quicklauncher/releases/tag/untagged-9367661a9eed8b1a939f) remains unpublished. Mandatory encrypted offline key custody is owner-deferred and still required under ADR 0025, so Phase 9 and `P9-GATES` remain open. Historical device results retain their original APK identities and are not measurements of the new signed bytes. The authoritative ledger is [Phase 9 release evidence](phase-9-release-evidence.md).
+The production-signed stable `v0.1.1` draft resolves to reviewed source `2483b009733f9da07231ff8b11c6ed015e46b75b`. Candidate local, visual, license and both review axes pass at fingerprint `0811deaa4463623cf727574410775aaea8ca9855ba22b9ca8c9a8f2e3afebbb5`. The protected hosted run passed pre-sign gates and produced a signed, attested draft; its final verification step failed on a draft lookup HTTP 404. Independent downloaded-artifact verification then passed all 14 commands. [Draft 397833383](https://github.com/Costeer/quicklauncher/releases/tag/untagged-9367661a9eed8b1a939f) remains unpublished. The owner approved a release-specific exception to ADR 0025’s offline-disconnection requirement after the encrypted backup was copied and verified on `/mnt/Sabrent/Quicklauncher/signing-backups/stable/`. The drive remains mounted and is not offline; the technical requirement is not satisfied, and the general ADR policy is unchanged. Publication of the existing verified `v0.1.1` is authorized and pending execution; Phase 9 and `P9-GATES` remain open until publication is recorded. Historical device results retain their original APK identities and are not measurements of the new signed bytes. The authoritative ledger is [Phase 9 release evidence](phase-9-release-evidence.md).
 
 ## Current candidate
 
@@ -24,9 +24,9 @@ Historical candidate and device evidence follows; these fingerprints are not the
 - Passed locally: `P9-SECURITY`, `P9-CHANNELS`, `P9-KEYS`, and `P9-DOCS`.
 - Device evidence closed: the current GrapheneOS and pinned API 35 portions of `P9-A11Y`, `P9-PERF`, and `P9-GATES` pass. All five benchmark scenarios and all six measurable thresholds pass on the pinned target.
 - `P9-RELEASE` downloaded-draft identity/provenance proof passes independently for the production stable draft. The original hosted final-step lookup failure remains recorded.
-- `P9-GATES` remains open for required production offline key custody, explicitly deferred by the owner; later workflow repair must retain its own validation evidence.
+- `P9-GATES` remains open pending authorized publication under the owner-approved release-specific offline-disconnection exception; later workflow repair retains its own validation evidence.
 - The explicitly authorized GrapheneOS Pixel 10a and pinned API 35 AOSP AVD were used only for their bounded matrices. The AVD was restored exactly, stopped without saving a snapshot, and confirmed offline.
-- The first stable identity was created with explicit owner authorization on 2026-09-27. Protected signing and draft creation succeeded; no release has been published. The verified same-machine encrypted backups and vault record do not complete mandatory offline custody.
+- The first stable identity was created with explicit owner authorization on 2026-09-27. Protected signing and draft creation succeeded; no release has been published. The verified Sabrent copy remains mounted and does not satisfy offline custody; the owner has approved a release-specific exception, leaving general ADR 0025 policy unchanged.
 
 ## Authorized GrapheneOS result
 
@@ -64,8 +64,8 @@ Historical candidate and device evidence follows; these fingerprints are not the
 
 ## Remaining actions
 
-1. Keep the independently verified stable draft unpublished. Its immutable `v0.1.1` tag is preserved; the earlier `v0.1.0` tag also remains unchanged.
-2. Complete mandatory production encrypted offline backup custody when the owner supplies offline media. The owner explicitly deferred it while allowing the unpublished draft. Local directories and Proton Pass do not satisfy offline separation.
+1. Publish the existing independently verified stable `v0.1.1` as explicitly authorized, preserving its immutable tag and assets; the earlier `v0.1.0` tag also remains unchanged.
+2. Integrate custody evidence `0433b07` and the owner-approved release-specific offline-disconnection exception. The verified Sabrent copy remains mounted and is not offline; general ADR 0025 policy is unchanged. Workflow repair `0e27d8c` and evidence documentation `7d860b4` were already merged by PR #2 at `38a3ea7`.
 3. Retain the failed hosted run and independently passing downloaded proof as separate evidence. Draft-lookup repair commit `0e27d8c` applies to future workflows; it is not signed-tag source and is not an overall-green rerun.
 
 The independently trusted certificate SHA-256 is `0016a14b7da64d41379969dcfb9323fcaf03a3cfda1452e25c9286c5b2011528`. Full artifact identity, exact verification commands, hosted approval, and evidence paths are in [Phase 9 release evidence](phase-9-release-evidence.md). Historical device runs retain their original APK identities and are not measurements of the new signed bytes.

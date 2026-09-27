@@ -139,9 +139,9 @@ Status: complete.
 
 ## P9-03A: release identity, provenance, and channels
 
-Resume update (2026-09-28): public visibility, reviewer protection, first stable signing identity, encrypted local restores and trusted certificate are configured. Corrected candidate `v0.1.1` at `2483b009733f9da07231ff8b11c6ed015e46b75b` passed local gates and both review axes; protected pre-sign gates, production signing and attestation succeeded. Independent downloaded-draft verification passed all 14 commands. The hosted final-step draft lookup failed HTTP 404 and remains recorded separately. Future-workflow repair commit `0e27d8c` does not change the signed tag. Mandatory offline key custody remains required and owner-deferred; the draft is unpublished.
+Resume update (2026-09-28): public visibility, reviewer protection, first stable signing identity, encrypted local restores and trusted certificate are configured. Corrected candidate `v0.1.1` at `2483b009733f9da07231ff8b11c6ed015e46b75b` passed local gates and both review axes; protected pre-sign gates, production signing and attestation succeeded. Independent downloaded-draft verification passed all 14 commands. The hosted final-step draft lookup failed HTTP 404 and remains recorded separately. Future-workflow repair commit `0e27d8c` does not change the signed tag. The owner approved a release-specific exception to ADR 0025’s offline-disconnection requirement after the encrypted backup was copied and verified on `/mnt/Sabrent/Quicklauncher/signing-backups/stable/`. The drive remains mounted and is not offline; the technical requirement is not satisfied, and the general ADR policy is unchanged. Publication of the existing verified `v0.1.1` is authorized and pending execution; Phase 9 and `P9-GATES` remain open until publication is recorded.
 
-Status: local/dummy and production stable downloaded proof pass; original hosted run failed only the final draft lookup. Overall Phase 9 remains open for offline custody.
+Status: local/dummy and production stable downloaded proof pass; original hosted run failed only the final draft lookup. Overall Phase 9 remains open pending authorized publication under the release-specific custody exception.
 
 - Acceptance IDs: `P9-RELEASE`, `P9-CHANNELS`.
 - User goal: keep channels separate and independently verify a downloaded draft's tag, application ID, certificate, digest, and provenance.
@@ -165,7 +165,7 @@ Status: local/dummy and production stable downloaded proof pass; original hosted
   - `tools/release/test_release_tools.py`
   - `tools/release/fixtures/github-attestation-verification.json`
   - `tools/release/__init__.py`
-- Excluded work: disposable recovery is P9-03B. Production signing was subsequently explicitly authorized and its verified draft evidence is in the release ledger. Publication remains excluded. Required production offline custody is owner-deferred; original tag `v0.1.0` and signed tag `v0.1.1` remain unchanged.
+- Excluded work: disposable recovery is P9-03B. Production signing was subsequently explicitly authorized and its verified draft evidence is in the release ledger. Publication was excluded from this historical packet and is now explicitly authorized in P9-PUBLISH. The owner approved a release-specific offline-disconnection exception; the Sabrent backup remains mounted and is not offline. General ADR 0025 policy is unchanged; original tag `v0.1.0` and signed tag `v0.1.1` remain unchanged.
 - Focused checks:
   - `env PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -v -s tools/release -p 'test*.py'`
   - `env PYTHONDONTWRITEBYTECODE=1 python3 tools/release/validate_channels.py && env PYTHONDONTWRITEBYTECODE=1 python3 tools/release/validate_workflows.py`
@@ -208,7 +208,7 @@ Status: complete.
 
 ## P9-05: final release evidence
 
-Status: corrected candidate gates and both review axes pass; independent real-draft proof passes. Historical authorized device evidence retains its original identities. Mandatory production offline custody remains owner-deferred and required; Phase 9 is incomplete. The original hosted final-step failure is preserved separately from future workflow repair.
+Status: corrected candidate gates and both review axes pass; independent real-draft proof passes. Historical authorized device evidence retains its original identities. The owner approved a release-specific exception to ADR 0025’s offline-disconnection requirement after the encrypted backup was copied and verified on `/mnt/Sabrent/Quicklauncher/signing-backups/stable/`. The drive remains mounted and is not offline; the technical requirement is not satisfied, and the general ADR policy is unchanged. Publication of the existing verified `v0.1.1` is authorized and pending execution; Phase 9 and `P9-GATES` remain open until publication is recorded. The original hosted final-step failure is preserved separately from future workflow repair.
 
 - Acceptance IDs: `P9-GATES`.
 - User goal: bind every applicable gate and both review axes to the final relevant candidate without publishing.
