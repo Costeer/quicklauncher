@@ -1,8 +1,14 @@
 # Phase 9 release-hardening handoff
 
-Phase 9 repository work is implemented; its final local, visual, dependency, license, workflow, privacy, security, release, repository, and separate two-axis review gates pass, as do the owner-authorized current GrapheneOS and pinned API 35 AOSP matrices. Phase 9 is not complete because the authorized protected downloaded-draft verification is concretely blocked. The authoritative ledger is [Phase 9 release evidence](phase-9-release-evidence.md).
+The production-signed stable `v0.1.1` draft resolves to reviewed source `2483b009733f9da07231ff8b11c6ed015e46b75b`. Candidate local, visual, license and both review axes pass at fingerprint `0811deaa4463623cf727574410775aaea8ca9855ba22b9ca8c9a8f2e3afebbb5`. The protected hosted run passed pre-sign gates and produced a signed, attested draft; its final verification step failed on a draft lookup HTTP 404. Independent downloaded-artifact verification then passed all 14 commands. [Draft 397833383](https://github.com/Costeer/quicklauncher/releases/tag/untagged-9367661a9eed8b1a939f) remains unpublished. Mandatory encrypted offline key custody is owner-deferred and still required under ADR 0025, so Phase 9 and `P9-GATES` remain open. Historical device results retain their original APK identities and are not measurements of the new signed bytes. The authoritative ledger is [Phase 9 release evidence](phase-9-release-evidence.md).
 
 ## Current candidate
+
+- The corrected `v0.1.1` candidate is `2483b009733f9da07231ff8b11c6ed015e46b75b`, fingerprint `0811deaa4463623cf727574410775aaea8ca9855ba22b9ca8c9a8f2e3afebbb5`. With Temurin 17, the complete local gate passed in 697s wrapper time (698.3s orchestration), with 4,616 task events and 1,547 tests, zero failures/errors/skips. Six-module no-record visual verification passed 365 tests; all 23 workflow-derived module license tasks and the 51-dependency benchmark audit passed. Both review axes passed after their bounded documentation rechecks. Evidence: `/tmp/quicklauncher-phase9-release-resume/candidate-gates/ledger.json` and `/tmp/quicklauncher-phase9-release-resume/review/`.
+- [Hosted run 36353204579](https://github.com/Costeer/quicklauncher/actions/runs/36353204579) passed tag preflight and full pre-sign gates: 1,593 tests, zero failures/errors/skips, 1,129s wrapper time. Costeer approved the protected environment. Production signing, attestation and draft creation passed; the final redownload step failed because the release-by-tag API returned HTTP 404 for the draft. The workflow overall remains failed.
+- Independent verification passed all 14 commands against the freshly fetched tag and exactly three uploaded release assets. GitHub's automatically generated source ZIP/TAR links are separate. The draft remains unpublished. Future-workflow repair commit `0e27d8c` addresses draft lookup; it is not part of the signed tag and does not rewrite that failed run. Full proof: [Phase 9 release evidence](phase-9-release-evidence.md).
+
+Historical candidate and device evidence follows; these fingerprints are not the new signed APK:
 
 - Earlier fully executed device-independent source candidate fingerprint: `33e764da0583059d07ca21906d824964a0b988aa9a39f4193e0015cbcf8d5eac`.
 - Connected GrapheneOS candidate fingerprint after the bounded instrumentation-harness repair: `9d013c4b8b79b227243f67aa38efb50dcdff90b6783decc9714247b3dd28289d` before and after the focused and full passing runs.
@@ -11,16 +17,16 @@ Phase 9 repository work is implemented; its final local, visual, dependency, lic
 - Final post-API 35 repository-gate fingerprint: `f8a76ee4c87da5749f52f9fc93cb262cb9434358e81c8e97d9433e71840fa97f` for the passing aggregate, visual, license, and non-Gradle gates. This is distinct from the device source fingerprint above.
 - Final documentation-inclusive review fingerprint: `6b1337cd066ca29925563bc02b571a85afb8062eb426a9ed4767e0510577bd88`. Specification passed with zero findings; documented standards passed with zero violations and three medium advisory smells. Reports: `/tmp/quicklauncher-phase9-final-review-api35/spec.md` and `/tmp/quicklauncher-phase9-final-review-api35/standards.md`.
 - Reviewed release commit: `eaf6af3503b30254e8a5917c579b83620ed8d6e4`. Unsigned annotated tag `v0.1.0` (tag object `0067b8ced201d172ebc211c093d2d1a967c8c93e`) peels to that exact commit; `origin/main` also matched at the pre-dispatch capture before later evidence-only documentation.
-- Worktree state is intentionally dirty. Preserve every tracked and untracked path, including `modules/layout/core/hs_err_pid51270.log`, `hs_err_pid276805.log`, and `hs_err_pid431514.log`.
+- Earlier crash logs and failed-run evidence were retained outside the corrected candidate. Preserve those historical records; current worktree status must be read from Git rather than inferred from the old handoff.
 
 ## Acceptance state
 
 - Passed locally: `P9-SECURITY`, `P9-CHANNELS`, `P9-KEYS`, and `P9-DOCS`.
 - Device evidence closed: the current GrapheneOS and pinned API 35 portions of `P9-A11Y`, `P9-PERF`, and `P9-GATES` pass. All five benchmark scenarios and all six measurable thresholds pass on the pinned target.
-- Implemented but open: `P9-RELEASE` still lacks the protected real-draft redownload/provenance result.
-- Open until all final evidence exists: `P9-GATES`.
+- `P9-RELEASE` downloaded-draft identity/provenance proof passes independently for the production stable draft. The original hosted final-step lookup failure remains recorded.
+- `P9-GATES` remains open for required production offline key custody, explicitly deferred by the owner; later workflow repair must retain its own validation evidence.
 - The explicitly authorized GrapheneOS Pixel 10a and pinned API 35 AOSP AVD were used only for their bounded matrices. The AVD was restored exactly, stopped without saving a snapshot, and confirmed offline.
-- No APK or draft release has been published or created. The first production stable key was created with explicit owner authorization on 2026-09-27, backed up, and provisioned; no production APK has been signed yet.
+- The first stable identity was created with explicit owner authorization on 2026-09-27. Protected signing and draft creation succeeded; no release has been published. The verified same-machine encrypted backups and vault record do not complete mandatory offline custody.
 
 ## Authorized GrapheneOS result
 
@@ -58,12 +64,11 @@ Phase 9 repository work is implemented; its final local, visual, dependency, lic
 
 ## Remaining actions
 
-1. The source-control and authentication prerequisites are closed: remote stable tag `v0.1.0` matches candidate commit `eaf6af3503b30254e8a5917c579b83620ed8d6e4`, and `gh` is authenticated as `Costeer`.
-2. Release setup is configured: the owner authorized public visibility, required reviewer `Costeer`, administrator bypass disabled, and exact tag policies for `v0.1.0` and `v0.1.1`. After confirming no production key existed, the owner authorized creating the first stable identity. Proton Pass contains the verified identity note; both encrypted local backups restore the same certificate. All four GitHub signing secrets and `QUICKLAUNCHER_STABLE_CERT_SHA256` are configured. Temporary plaintext staging is removed.
-3. Hosted CI exposed the removed Android SDK package `tools` requested by the pinned setup action. The corrected candidate explicitly installs `platform-tools`, changes app version to `0.1.1`/code `2`, and updates the exact manifest audit policy. The previous `v0.1.0` tag is preserved. Candidate source is based on `8cf6116`; remote main's later unrelated JVM crash-log commit is preserved remotely and excluded from this candidate.
-4. Complete candidate gates and separate review axes, commit/tag the corrected candidate, and dispatch `release-stable.yml` at ref and input `v0.1.1`. Approve the protected job, download only the expected APK/checksum/metadata assets, and run the independent verifier plus GitHub attestation verification. Keep the release a draft. Evidence: `/tmp/quicklauncher-phase9-release-resume/`.
+1. Keep the independently verified stable draft unpublished. Its immutable `v0.1.1` tag is preserved; the earlier `v0.1.0` tag also remains unchanged.
+2. Complete mandatory production encrypted offline backup custody when the owner supplies offline media. The owner explicitly deferred it while allowing the unpublished draft. Local directories and Proton Pass do not satisfy offline separation.
+3. Retain the failed hosted run and independently passing downloaded proof as separate evidence. Draft-lookup repair commit `0e27d8c` applies to future workflows; it is not signed-tag source and is not an overall-green rerun.
 
-The independently established stable certificate SHA-256 is `0016a14b7da64d41379969dcfb9323fcaf03a3cfda1452e25c9286c5b2011528`. The two local encrypted backups are in separate directories on the same machine; the Proton Pass record also contains the complete identity. ADR 0025 requires encrypted offline backup custody. No offline media is mounted; the owner explicitly chose to leave that requirement pending while the unpublished draft proceeds. The two local copies and online vault are not recorded as completed offline custody. Historical device runs below retain their original APK identities; they are not measurements of the new version's bytes.
+The independently trusted certificate SHA-256 is `0016a14b7da64d41379969dcfb9323fcaf03a3cfda1452e25c9286c5b2011528`. Full artifact identity, exact verification commands, hosted approval, and evidence paths are in [Phase 9 release evidence](phase-9-release-evidence.md). Historical device runs retain their original APK identities and are not measurements of the new signed bytes.
 
 ## Local reproduction
 
