@@ -282,7 +282,8 @@ jobs:
           gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
             --pattern "$asset" --pattern "$asset.sha256" --pattern "release-metadata.json" \
             --dir "$download_dir/payload"
-          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" --jq '.assets' > "$download_dir/assets.json"
+          release_api_url="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json apiUrl --jq '.apiUrl')"
+          gh api "$release_api_url" --jq '.assets' > "$download_dir/assets.json"
           gh attestation verify "$download_dir/payload/$asset" --repo "$GITHUB_REPOSITORY" \
             --deny-self-hosted-runners \
             --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release-stable.yml" \
