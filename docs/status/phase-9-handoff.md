@@ -20,7 +20,7 @@ Phase 9 repository work is implemented; its final local, visual, dependency, lic
 - Implemented but open: `P9-RELEASE` still lacks the protected real-draft redownload/provenance result.
 - Open until all final evidence exists: `P9-GATES`.
 - The explicitly authorized GrapheneOS Pixel 10a and pinned API 35 AOSP AVD were used only for their bounded matrices. The AVD was restored exactly, stopped without saving a snapshot, and confirmed offline.
-- No APK was published, no Git tag or release was created, no production APK was signed, and no production signing material was accessed or reconstructed.
+- No APK or draft release has been published or created. The first production stable key was created with explicit owner authorization on 2026-09-27, backed up, and provisioned; no production APK has been signed yet.
 
 ## Authorized GrapheneOS result
 
@@ -59,8 +59,11 @@ Phase 9 repository work is implemented; its final local, visual, dependency, lic
 ## Remaining actions
 
 1. The source-control and authentication prerequisites are closed: remote stable tag `v0.1.0` matches candidate commit `eaf6af3503b30254e8a5917c579b83620ed8d6e4`, and `gh` is authenticated as `Costeer`.
-2. The protected real-draft run remains blocked. Creating `release-stable` with required reviewer `Costeer` returned HTTP 422 because the current billing capability does not support the required-reviewer rule for this private repository. The resulting environment is empty and unprotected; all four stable signing secret names and `QUICKLAUNCHER_STABLE_CERT_SHA256` are absent. It must not be used as protected evidence. Evidence: `/tmp/quicklauncher-phase9-stable-pre-dispatch/`.
-3. After the plan/repository configuration supports the mandated reviewer and the owner provisions the existing stable signing identity plus independently trusted certificate variable, dispatch `release-stable.yml` at ref and input `v0.1.0`, download only the expected APK/checksum/metadata assets, and run the independent verifier plus GitHub attestation verification. Keep the release a draft until the exit condition is reviewed.
+2. Release setup is configured: the owner authorized public visibility, required reviewer `Costeer`, administrator bypass disabled, and exact tag policies for `v0.1.0` and `v0.1.1`. After confirming no production key existed, the owner authorized creating the first stable identity. Proton Pass contains the verified identity note; both encrypted local backups restore the same certificate. All four GitHub signing secrets and `QUICKLAUNCHER_STABLE_CERT_SHA256` are configured. Temporary plaintext staging is removed.
+3. Hosted CI exposed the removed Android SDK package `tools` requested by the pinned setup action. The corrected candidate explicitly installs `platform-tools`, changes app version to `0.1.1`/code `2`, and updates the exact manifest audit policy. The previous `v0.1.0` tag is preserved. Candidate source is based on `8cf6116`; remote main's later unrelated JVM crash-log commit is preserved remotely and excluded from this candidate.
+4. Complete candidate gates and separate review axes, commit/tag the corrected candidate, and dispatch `release-stable.yml` at ref and input `v0.1.1`. Approve the protected job, download only the expected APK/checksum/metadata assets, and run the independent verifier plus GitHub attestation verification. Keep the release a draft. Evidence: `/tmp/quicklauncher-phase9-release-resume/`.
+
+The independently established stable certificate SHA-256 is `0016a14b7da64d41379969dcfb9323fcaf03a3cfda1452e25c9286c5b2011528`. The two local encrypted backups are in separate directories on the same machine; the Proton Pass record also contains the complete identity. An additional offline-device copy is still advisable for loss of this machine. Historical device runs below retain their original APK identities; they are not measurements of the new version's bytes.
 
 ## Local reproduction
 

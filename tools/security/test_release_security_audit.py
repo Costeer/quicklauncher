@@ -18,7 +18,7 @@ else:
 
 def manifest(channel: str) -> str:
     package_name = "org.quicklauncher" if channel == "stable" else "org.quicklauncher.preview"
-    version_name = "0.1.0" if channel == "stable" else "0.1.0-preview"
+    version_name = "0.1.1" if channel == "stable" else "0.1.1-preview"
     dynamic_permission = f"{package_name}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
     permission_xml = "\n".join(
         f'<uses-permission android:name="{permission}" />'
@@ -31,7 +31,7 @@ def manifest(channel: str) -> str:
     )
     return f"""<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="{audit.ANDROID_NS}" package="{package_name}"
-    android:versionCode="1" android:versionName="{version_name}">
+    android:versionCode="2" android:versionName="{version_name}">
   <uses-sdk android:minSdkVersion="35" android:targetSdkVersion="35" />
   {permission_xml}
   <permission android:name="{dynamic_permission}" android:protectionLevel="signature" />
@@ -388,8 +388,8 @@ class ReleaseSecurityAuditTest(unittest.TestCase):
                 [
                     'applicationId = "org.quicklauncher"',
                     'applicationIdSuffix = ".preview"',
-                    "versionCode = 1",
-                    'versionName = "0.1.0"',
+                    "versionCode = 2",
+                    'versionName = "0.1.1"',
                     'buildConfigField("String", "CHANNEL", "\\"stable\\"")',
                     'buildConfigField("String", "CHANNEL", "\\"preview\\"")',
                     'release { signingConfig = signingConfigs.getByName("debug") }',

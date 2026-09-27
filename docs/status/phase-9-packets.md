@@ -139,6 +139,8 @@ Status: complete.
 
 ## P9-03A: release identity, provenance, and channels
 
+Resume update (2026-09-27): public visibility, reviewer protection, first stable signing identity, vault recovery record, encrypted backup restoration, GitHub secrets, and trusted certificate are configured. Hosted SDK setup needs the bounded correction in `/tmp/quicklauncher-phase9-release-resume/packet.md`: explicit `platform-tools`, candidate `0.1.1`/code `2`, matching security audit policy. Existing `v0.1.0` is preserved. Candidate gates/reviews and downloaded-draft verification remain open; earlier blocker notes below are historical.
+
 Status: local/dummy verification complete; protected real draft is authorized but blocked at preflight.
 
 - Acceptance IDs: `P9-RELEASE`, `P9-CHANNELS`.

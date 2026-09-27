@@ -106,7 +106,7 @@ def audit_merged_manifest(path: Path, channel: str) -> list[Finding]:
             _finding("manifest.application_id", path, f"expected {expected_package}, got {package_name!r}")
         )
 
-    expected_version_name = "0.1.0" if channel == "stable" else "0.1.0-preview"
+    expected_version_name = "0.1.1" if channel == "stable" else "0.1.1-preview"
     if root.get(A + "versionName") != expected_version_name:
         findings.append(
             _finding(
@@ -115,9 +115,9 @@ def audit_merged_manifest(path: Path, channel: str) -> list[Finding]:
                 f"expected {expected_version_name}, got {root.get(A + 'versionName')!r}",
             )
         )
-    if root.get(A + "versionCode") != "1":
+    if root.get(A + "versionCode") != "2":
         findings.append(
-            _finding("manifest.version_code", path, "release versionCode must be exactly 1 for 0.1.0")
+            _finding("manifest.version_code", path, "release versionCode must be exactly 2 for 0.1.1")
         )
 
     sdk = root.find("uses-sdk")
